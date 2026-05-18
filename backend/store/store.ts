@@ -89,6 +89,8 @@ class StoreManager {
     }
 
     const storagePath = this.getStoragePath()
+    console.log(`[Store] Data directory: ${storagePath}`)
+    console.log(`[Store] Data file: ${join(storagePath, 'data.json')}`)
     
     // Make sure storage path exists
     if (!fs.existsSync(storagePath)) {
@@ -107,6 +109,11 @@ class StoreManager {
       await this.initializeDefaultProviders()
       this.isInitialized = true
       this.initializationError = null
+
+      // Debug: log what was loaded
+      const providers = this.store!.get('providers') || []
+      const accounts = this.store!.get('accounts') || []
+      console.log(`[Store] Loaded ${providers.length} providers, ${accounts.length} accounts`)
     } catch (error) {
       console.error('[Store] Failed to initialize storage:', error)
       this.initializationError = error instanceof Error ? error : new Error(String(error))
@@ -159,7 +166,15 @@ class StoreManager {
    * Storage path: ~/.chat2api/
    */
   private getStoragePath(): string {
-    return process.env.CHAT2API_DATA_DIR || join(homedir(), '.chat2api')
+    const envPath = process.env.CHAT2API_DATA_DIR
+    const resolved = envPath || join(homedir(), '.chat2api')
+    // Log once for debugging path issues
+    if (!this.isInitialized) {
+      console.log(`[Store] CHAT2API_DATA_DIR env: ${envPath || '(not set)'}`)
+      console.log(`[Store] os.homedir(): ${homedir()}`)
+      console.log(`[Store] Resolved storage path: ${resolved}`)
+    }
+    return resolved
   }
 
   /**
