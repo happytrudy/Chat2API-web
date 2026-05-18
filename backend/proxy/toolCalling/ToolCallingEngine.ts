@@ -4,7 +4,7 @@ import {
   DEFAULT_TOOL_CALLING_CONFIG,
   normalizeToolCallingConfig,
   type ToolCallingConfig,
-} from '../../../shared/toolCalling'
+} from '../../shared/toolCalling'
 import { getToolProtocol } from './protocols/index'
 import { getToolClientAdapter } from './clientAdapters/index'
 import { buildToolCallingRuntimePlan } from './runtimePlan'

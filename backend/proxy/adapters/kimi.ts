@@ -49,6 +49,7 @@ interface KimiMessage {
 
 interface ChatCompletionRequest {
   model: string
+  originalModel?: string
   messages: KimiMessage[]
   stream?: boolean
   temperature?: number
@@ -476,7 +477,7 @@ export class KimiStreamHandler {
   async handleStream(stream: any): Promise<PassThrough> {
     const transStream = new PassThrough()
     const created = unixTimestamp()
-    let buffer = Buffer.alloc(0)
+    let buffer: Buffer = Buffer.alloc(0)
     let sentRole = false
 
     stream.on('data', (chunk: Buffer) => {

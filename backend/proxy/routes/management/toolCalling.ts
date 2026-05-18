@@ -7,8 +7,8 @@ import {
   getLatestToolCallingSmokeResult,
   setLatestToolCallingSmokeResult,
 } from '../../toolCalling/diagnostics'
-import type { ManagementApiResponse } from '../../../../shared/types'
-import type { ToolClientAdapterId } from '../../../../shared/toolCalling'
+import type { ManagementApiResponse } from '../../../shared/types'
+import type { ToolClientAdapterId } from '../../../shared/toolCalling'
 
 const router = new Router({ prefix: '/v0/management/tool-calling' })
 

@@ -11,7 +11,7 @@ import {
   ModelMapping,
   DEFAULT_CONFIG,
 } from './types'
-import { normalizeToolCallingConfig } from '../../shared/toolCalling'
+import { normalizeToolCallingConfig } from '../shared/toolCalling'
 
 /**
  * Config Manager class

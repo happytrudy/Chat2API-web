@@ -277,7 +277,7 @@ export class MiniMaxAdapter extends BaseOAuthAdapter {
    */
   private extractUserIdFromToken(token: string): string | undefined {
     try {
-      const payload = this.parseJWT(token)
+      const payload = this.parseJWT(token) as Record<string, any> | null
       return payload?.user?.id as string | undefined || payload?.sub as string | undefined
     } catch {
       return undefined

@@ -173,6 +173,8 @@ export interface ToolCall {
     name: string
     arguments: string
   }
+  /** Internal field used during parsing, deleted before sending to client */
+  rawText?: string
 }
 
 /**

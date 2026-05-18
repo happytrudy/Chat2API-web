@@ -1,4 +1,4 @@
-import type { ToolCallingConfig } from '../../../shared/toolCalling'
+import type { ToolCallingConfig } from '../../shared/toolCalling'
 import type { NormalizedClientToolRequest } from './clientAdapters/types'
 import { getProviderToolProfile } from './providerProfiles'
 import type { ToolCallingPlan } from './types'

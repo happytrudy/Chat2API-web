@@ -632,7 +632,7 @@ export class RequestForwarder {
       const adapter = new KimiAdapter(provider, account)
       const { response, conversationId } = await adapter.chatCompletion({
         model: actualModel,
-        original_model: request.model,
+        originalModel: request.model,
         messages: transformed.messages as any,
         stream: request.stream,
         temperature: request.temperature,
@@ -732,7 +732,7 @@ export class RequestForwarder {
       const adapter = new QwenAdapter(provider, account)
       const { response, sessionId, reqId } = await adapter.chatCompletion({
         model: actualModel,
-        original_model: request.model,
+        originalModel: request.model,
         messages: transformedRequest.messages as any,
         stream: request.stream,
         temperature: request.temperature,

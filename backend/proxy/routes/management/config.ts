@@ -9,9 +9,11 @@ import { managementAuthMiddleware } from '../../middleware/managementAuth'
 import ConfigManager from '../../../store/config'
 import type {
   ManagementApiResponse,
-  AppConfig,
   ConfigUpdateRequest,
-} from '../../../../shared/types'
+} from '../../../shared/types'
+import type {
+  AppConfig,
+} from '../../../store/types'
 
 const router = new Router({ prefix: '/v0/management/config' })
 
@@ -158,7 +160,7 @@ router.put('/', async (ctx: Context) => {
 
 router.get('/:key', async (ctx: Context) => {
   try {
-    const key = ctx.params.key as keyof AppConfig
+    const key = ctx.params.key as Extract<keyof AppConfig, string>
 
     const config = ConfigManager.get()
 
@@ -196,7 +198,7 @@ router.get('/:key', async (ctx: Context) => {
 
 router.put('/:key', async (ctx: Context) => {
   try {
-    const key = ctx.params.key as keyof AppConfig
+    const key = ctx.params.key as Extract<keyof AppConfig, string>
     const { value } = ctx.request.body as { value: unknown }
 
     if (value === undefined) {

@@ -361,7 +361,7 @@ export class ZaiAdapter {
     
     // Extract system message and merge with user message
     let systemContent = ''
-    let processedMessages = []
+    let processedMessages: ZaiMessage[] = []
     
     for (const msg of request.messages) {
       if (msg.role === 'system') {

@@ -2,7 +2,7 @@ import Router from '@koa/router'
 import type { Context } from 'koa'
 import { managementAuthMiddleware } from '../../../middleware/managementAuth'
 import { oauthManager } from '../../../../oauth/manager'
-import type { ProviderVendor } from '../../../../../shared/types'
+import type { ProviderVendor } from '../../../../shared/types'
 import { AccountManager } from '../../../../store/accounts'
 
 const router = new Router({ prefix: '/v0/management/oauth' })

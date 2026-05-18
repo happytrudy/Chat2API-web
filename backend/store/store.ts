@@ -8,7 +8,7 @@ import { homedir } from 'os'
 import { join } from 'path'
 import * as crypto from 'crypto'
 import * as fs from 'fs'
-const Conf = require('conf')
+
 import {
   StoreSchema,
   AppConfig,
@@ -92,11 +92,12 @@ class StoreManager {
     }
 
     try {
+      const { default: Conf } = await import('conf')
       this.store = new Conf({
         projectName: 'chat2api',
         configName: 'data',
         cwd: storagePath,
-        defaults: this.getDefaultData()
+        defaults: this.getDefaultData() as Record<string, any>
       })
 
       await this.initializeAppLogManager(storagePath)

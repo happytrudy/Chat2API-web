@@ -1,4 +1,4 @@
-import type { ToolClientAdapterId } from '../../../../shared/toolCalling'
+import type { ToolClientAdapterId } from '../../../shared/toolCalling'
 import type { ToolClientAdapter } from './types'
 import { standardOpenAiToolsAdapter } from './standardOpenAiTools'
 import { cherryStudioMcpAdapter } from './cherryStudioMcp'

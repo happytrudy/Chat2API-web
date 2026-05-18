@@ -80,7 +80,6 @@ export class AccountManager {
       requestCount: 0,
       todayUsed: 0,
       dailyLimit: data.dailyLimit,
-      lastStatusCheck: now,
       lastUsed: now,
     }
     

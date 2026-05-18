@@ -28,7 +28,7 @@ Use Anthropic-style tool invocation only when this protocol is enabled.`
     const allowedNames = toolNames(context.tools)
     const rawMatches: string[] = []
     const invalidToolNames: string[] = []
-    const toolCalls = []
+    const toolCalls: ReturnType<typeof buildToolCall>[] = []
     const blockPattern = /<antml:function_calls>([\s\S]*?)<\/antml:function_calls>/g
     let blockMatch: RegExpExecArray | null
 

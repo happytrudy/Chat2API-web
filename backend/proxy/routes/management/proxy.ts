@@ -11,7 +11,7 @@ import { proxyStatusManager } from '../../status'
 import type {
   ManagementApiResponse,
   ProxyStatusResponse,
-} from '../../../../shared/types'
+} from '../../../shared/types'
 
 const router = new Router({ prefix: '/v0/management/proxy' })
 

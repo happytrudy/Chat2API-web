@@ -1,6 +1,6 @@
 import type { ChatCompletionRequest } from '../../types'
 import type { NormalizedToolDefinition } from '../types'
-import type { ToolClientAdapterId } from '../../../../shared/toolCalling'
+import type { ToolClientAdapterId } from '../../../shared/toolCalling'
 
 export interface NormalizedToolChoice {
   mode: 'auto' | 'none' | 'required' | 'forced'

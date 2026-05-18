@@ -12,7 +12,7 @@ import type {
   CreateModelMappingRequest,
   UpdateModelMappingRequest,
   ManagementApiResponse,
-} from '../../../../shared/types'
+} from '../../../shared/types'
 
 const router = new Router({ prefix: '/v0/management' })
 

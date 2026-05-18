@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios'
 import { getBuiltinProvider } from './builtin'
-import type { Provider, ProviderCheckResult, Account } from '../../shared/types'
+import type { Provider, ProviderCheckResult, Account } from '../shared/types'
 import type { BuiltinProviderConfig } from '../store/types'
 
 const CHECK_TIMEOUT = 15000

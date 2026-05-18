@@ -53,7 +53,7 @@ export class QwenAdapter extends BaseOAuthAdapter {
     this.emitProgress('pending', 'Opening browser...')
     
     try {
-      await shell.openExternal(QWEN_WEB_BASE)
+
       this.emitProgress('pending', 'Please log in via browser and enter Ticket manually')
       
       return {

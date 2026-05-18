@@ -15,7 +15,7 @@ import type {
   ProxyStatusResponse,
   LogEntry,
   LogLevel,
-} from '../../../../shared/types'
+} from '../../../shared/types'
 import type { RequestLogEntry } from '../../../store/types'
 
 const router = new Router({ prefix: '/v0/management' })

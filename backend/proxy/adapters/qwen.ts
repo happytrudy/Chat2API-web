@@ -62,6 +62,7 @@ interface QwenMessage {
 
 interface ChatCompletionRequest {
   model: string
+  originalModel?: string
   messages: QwenMessage[]
   tools?: any[]
   stream?: boolean

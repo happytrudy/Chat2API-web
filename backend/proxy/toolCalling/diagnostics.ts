@@ -1,4 +1,4 @@
-import type { ToolClientAdapterId, ToolSmokeCategory } from '../../../shared/toolCalling'
+import type { ToolClientAdapterId, ToolSmokeCategory } from '../../shared/toolCalling'
 
 export interface ToolCallingSmokeResult {
   success: boolean

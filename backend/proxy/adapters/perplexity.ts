@@ -1,6 +1,6 @@
-import { net } from 'electron'
+import * as https from 'https'
 import { Readable } from 'stream'
-import { Account, Provider } from '../store/types'
+import { Account, Provider } from '../../store/types'
 
 const PERPLEXITY_URL = 'https://www.perplexity.ai'
 const QUERY_ENDPOINT = `${PERPLEXITY_URL}/rest/sse/perplexity_ask`
@@ -22,7 +22,7 @@ const FAKE_HEADERS: Record<string, string> = {
 
 interface PerplexityMessage {
   role: 'user' | 'assistant' | 'system' | 'tool'
-  content: string | null
+  content: string | null | any[]
   tool_call_id?: string
   tool_calls?: any[]
 }
@@ -166,7 +166,17 @@ export class PerplexityAdapter {
     this.account = account
     this.cookie = account.credentials.sessionToken || account.credentials.cookie || account.credentials.token || ''
     // Store all cookies from credentials for Cloudflare-protected requests
-    this.allCookies = account.credentials.cookies || {}
+    let parsedCookies: StoredCookies = {}
+    if (typeof account.credentials.cookies === 'string') {
+      try {
+        parsedCookies = JSON.parse(account.credentials.cookies)
+      } catch (e) {
+        // ignore
+      }
+    } else if (account.credentials.cookies && typeof account.credentials.cookies === 'object') {
+      parsedCookies = account.credentials.cookies as any
+    }
+    this.allCookies = parsedCookies
     // Ensure session token is in allCookies
     if (this.cookie && !this.allCookies['__Secure-next-auth.session-token']) {
       this.allCookies['__Secure-next-auth.session-token'] = this.cookie
@@ -314,9 +324,8 @@ export class PerplexityAdapter {
 
     // Use Electron's net API which uses Chromium's network stack
     // This bypasses Cloudflare's TLS fingerprint detection
-    const request_ = net.request({
+    const request_ = https.request(QUERY_ENDPOINT, {
       method: 'POST',
-      url: QUERY_ENDPOINT,
     })
 
     for (const [key, value] of Object.entries(headers)) {
@@ -458,9 +467,8 @@ export class PerplexityAdapter {
       }
 
       return new Promise((resolve) => {
-        const request_ = net.request({
+        const request_ = https.request(deleteUrl, {
           method: 'DELETE',
-          url: deleteUrl,
         })
 
         for (const [key, value] of Object.entries(headers)) {
@@ -527,9 +535,8 @@ export class PerplexityAdapter {
     }
 
     return new Promise((resolve) => {
-      const request_ = net.request({
+      const request_ = https.request(deleteUrl, {
         method: 'DELETE',
-        url: deleteUrl,
       })
 
       for (const [key, value] of Object.entries(headers)) {

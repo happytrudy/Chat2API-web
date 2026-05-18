@@ -48,7 +48,7 @@ export class MimoAdapter extends BaseOAuthAdapter {
     const phToken = cookies['xiaomichatbot_ph'] || cookies['ph_token']
 
     if (!serviceToken || !userId || !phToken) {
-      const missing = []
+      const missing: string[] = []
       if (!serviceToken) missing.push('serviceToken')
       if (!userId) missing.push('userId')
       if (!phToken) missing.push('xiaomichatbot_ph')

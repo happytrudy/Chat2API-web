@@ -751,6 +751,18 @@ export function tryRegexFallback(str: string): any | null {
 }
 
 /**
+ * Create a base chunk structure for OpenAI-compatible streaming responses
+ */
+export function createBaseChunk(id: string, model: string, created: number) {
+  return {
+    id,
+    model,
+    object: 'chat.completion.chunk',
+    created
+  }
+}
+
+/**
  * 创建流式状态
  */
 export function createStreamState(): StreamState {

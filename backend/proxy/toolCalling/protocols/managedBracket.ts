@@ -38,7 +38,7 @@ When calling tools, respond with only this block:
     const allowedNames = toolNames(context.tools)
     const rawMatches: string[] = []
     const invalidToolNames: string[] = []
-    const toolCalls = []
+    const toolCalls: ReturnType<typeof buildToolCall>[] = []
     const blockPattern = /\[function_calls\]([\s\S]*?)\[\/function_calls\]/g
     let blockMatch: RegExpExecArray | null
 

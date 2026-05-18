@@ -61,6 +61,7 @@ export class ProviderManager {
     name: string
     authType: AuthType
     apiEndpoint: string
+    chatPath?: string
     headers?: Record<string, string>
     description?: string
     icon?: string
@@ -115,7 +116,11 @@ export class ProviderManager {
       description: data.description,
       icon: data.icon,
       supportedModels: data.supportedModels,
-      credentialFields: data.credentialFields,
+    } as Provider
+
+    // Add credentialFields if provided (for builtin providers)
+    if (data.credentialFields) {
+      ;(provider as any).credentialFields = data.credentialFields
     }
     
     storeManager.addProvider(provider)
@@ -186,7 +191,9 @@ export class ProviderManager {
     if (result) {
       storeManager.addLog('info', `Delete provider: ${provider.name}`, {
         providerId: id,
-        deletedAccounts: accounts.length,
+        data: {
+          deletedAccounts: accounts.length,
+        },
       })
     }
     
