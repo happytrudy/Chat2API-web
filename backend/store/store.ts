@@ -274,15 +274,26 @@ class StoreManager {
 
   /**
    * Initialize Default Providers
-   * Clear provider list, users create providers by adding accounts
+   * Validates and refreshes builtin provider metadata on startup.
+   * Custom providers and user accounts are never touched.
    */
   private async initializeDefaultProviders(): Promise<void> {
     const providers = this.store?.get('providers') || []
     const builtinIds = BUILTIN_PROVIDERS.map(p => p.id)
+
+    // Debug: log what we're working with
+    console.log(`[Store] initializeDefaultProviders: ${providers.length} providers in data.json, ${builtinIds.length} builtin ids: [${builtinIds.join(', ')}]`)
+    if (providers.length > 0) {
+      console.log(`[Store] Provider ids in data.json: [${providers.map((p: Provider) => `${p.id}(type=${p.type})`).join(', ')}]`)
+    }
     
     const validProviders = providers.filter((p: Provider) => {
       if (p.type === 'builtin') {
-        return builtinIds.includes(p.id)
+        const valid = builtinIds.includes(p.id)
+        if (!valid) {
+          console.warn(`[Store] Removing unknown builtin provider: ${p.id}`)
+        }
+        return valid
       }
       return true
     })
