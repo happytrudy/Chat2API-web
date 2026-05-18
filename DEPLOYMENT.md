@@ -40,17 +40,23 @@ On first boot you will see something like:
 
 ```
 ================================================================
-  A new Management API secret was generated for this instance.
-  Copy it now - it will not be shown again unless you reset it.
-  Secret: mgmt_8c2c1f0a-...-c9af0e
+  First run detected.
+  Open the web UI to create your administrator password.
+  Until you do, the management API will reject every request
+  except /v0/management/auth/{status,setup,login}.
 ================================================================
 ```
 
-Open `http://your-server:8080/`, paste the secret in the login screen, and
-start adding providers.
+Open `http://your-server:8080/`. You will be greeted with a "Create
+administrator password" screen — pick a password (8+ chars), submit, and
+you are in. The password can be changed later from **Settings → Security →
+Administrator Password**.
 
-> **Tip:** in production, set `CHAT2API_MANAGEMENT_SECRET` in `.env` so the
-> secret stays stable across container rebuilds.
+> **Tip:** in headless deployments you can skip the web first-run flow
+> entirely by setting `CHAT2API_MANAGEMENT_SECRET` in `.env`. Chat2API
+> then uses that value as the long-lived secret and treats setup as
+> already done. You will still need to set a password from the UI later
+> if you want a friendly login screen.
 
 ## Quick start without Docker
 

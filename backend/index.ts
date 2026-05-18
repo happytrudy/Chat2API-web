@@ -2,7 +2,6 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { proxyServer } from './proxy/server'
 import { storeManager } from './store/store'
-import { generateManagementSecret } from './proxy/middleware/managementAuth'
 import * as dotenv from 'dotenv'
 
 // Load environment variables
@@ -18,48 +17,48 @@ process.on('unhandledRejection', (reason) => {
 })
 
 /**
- * On first run (or whenever the management secret is missing) auto-enable
- * the management API and generate a strong secret. The secret is printed
- * to stdout exactly once so the operator can capture it from the logs.
+ * Make sure the management API is enabled and surface the first-run state
+ * to the operator. The actual secret is created when the user sets a
+ * password from the web UI (see backend/proxy/routes/management/auth.ts).
  *
- * Set CHAT2API_MANAGEMENT_SECRET to use a fixed value (recommended for
- * production deployments).
+ * Operators can still inject a fixed secret via CHAT2API_MANAGEMENT_SECRET
+ * (useful for headless / scripted deployments).
  */
-function ensureManagementApiBootstrap(): { secret: string; generated: boolean } {
+function ensureManagementApiBootstrap(): { firstRun: boolean; envSecretApplied: boolean } {
   const config = storeManager.getConfig()
   const current = config.managementApi || {
-    enableManagementApi: false,
+    enableManagementApi: true,
     managementApiSecret: '',
-  }
-
-  let secret = current.managementApiSecret
-  let generated = false
-
-  // Allow operators to inject a fixed secret via env (e.g. Docker secret).
-  const envSecret = process.env.CHAT2API_MANAGEMENT_SECRET
-  if (envSecret && envSecret.trim()) {
-    secret = envSecret.trim()
-  } else if (!secret) {
-    secret = generateManagementSecret()
-    generated = true
+    firstRunCompleted: false,
   }
 
   const enable = process.env.CHAT2API_DISABLE_MANAGEMENT_API !== '1'
+  const envSecret = process.env.CHAT2API_MANAGEMENT_SECRET?.trim()
 
-  if (
-    current.managementApiSecret !== secret ||
-    current.enableManagementApi !== enable
-  ) {
-    storeManager.updateConfig({
-      managementApi: {
-        ...current,
-        enableManagementApi: enable,
-        managementApiSecret: secret,
-      },
-    })
+  let next = { ...current, enableManagementApi: enable }
+  let envSecretApplied = false
+
+  if (envSecret) {
+    // Treat env-provided secret as an explicit operator decision: enable
+    // the API and bypass the password-based first-run flow.
+    next = {
+      ...next,
+      managementApiSecret: envSecret,
+      firstRunCompleted: true,
+    }
+    envSecretApplied = true
   }
 
-  return { secret, generated }
+  if (
+    next.managementApiSecret !== current.managementApiSecret ||
+    next.enableManagementApi !== current.enableManagementApi ||
+    next.firstRunCompleted !== current.firstRunCompleted
+  ) {
+    storeManager.updateConfig({ managementApi: next })
+  }
+
+  const firstRun = !next.firstRunCompleted
+  return { firstRun, envSecretApplied }
 }
 
 /**
@@ -91,17 +90,20 @@ async function initializeApp(): Promise<void> {
     console.log('Storage initialized successfully')
 
     // 2. Make sure the management API is reachable from the web UI.
-    const { secret, generated } = ensureManagementApiBootstrap()
-    if (generated) {
+    const { firstRun, envSecretApplied } = ensureManagementApiBootstrap()
+    if (envSecretApplied) {
+      console.log('Management API: secret loaded from CHAT2API_MANAGEMENT_SECRET')
+    } else if (firstRun) {
       console.log('')
       console.log('================================================================')
-      console.log('  A new Management API secret was generated for this instance.')
-      console.log('  Copy it now - it will not be shown again unless you reset it.')
-      console.log(`  Secret: ${secret}`)
+      console.log('  First run detected.')
+      console.log('  Open the web UI to create your administrator password.')
+      console.log('  Until you do, the management API will reject every request')
+      console.log('  except /v0/management/auth/{status,setup,login}.')
       console.log('================================================================')
       console.log('')
     } else {
-      console.log('Management API: secret loaded from configuration / environment')
+      console.log('Management API: ready (password set; awaiting login)')
     }
 
     // 3. Optionally serve the built frontend from the same Koa server so

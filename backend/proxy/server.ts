@@ -14,6 +14,7 @@ import managementRoutes from './routes/management'
 import { proxyStatusManager } from './status'
 import { storeManager } from '../store/store'
 import { sessionManager } from './sessionManager'
+import { isPublicManagementPath } from './middleware/managementAuth'
 
 const SLOW_REQUEST_THRESHOLD_MS = 1500
 
@@ -241,6 +242,14 @@ export class ProxyServer {
     // This must be registered before management routes
     const managementEnableCheck = async (ctx: Context, next: Next) => {
       if (!ctx.path.startsWith('/v0/management')) {
+        await next()
+        return
+      }
+
+      // The first-run setup / login endpoints must remain reachable even
+      // when the operator has the API "disabled", otherwise the web UI
+      // would have no way to come back online.
+      if (isPublicManagementPath(ctx.path)) {
         await next()
         return
       }

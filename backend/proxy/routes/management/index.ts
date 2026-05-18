@@ -3,6 +3,7 @@
  * Exports all management route modules
  */
 
+import authRouter from './auth'
 import configRouter from './config'
 import providersRouter from './providers'
 import accountsRouter from './accounts'
@@ -18,6 +19,7 @@ import promptsRouter from './prompts'
 import appRouter from './app'
 
 export {
+  authRouter,
   configRouter,
   providersRouter,
   accountsRouter,
@@ -34,6 +36,10 @@ export {
 }
 
 export default [
+  // The auth router has to come first so its public endpoints are matched
+  // before any other middleware (and so the SPA can reach /auth/status
+  // even when the rest of the management API is not yet configured).
+  authRouter,
   configRouter,
   providersRouter,
   accountsRouter,

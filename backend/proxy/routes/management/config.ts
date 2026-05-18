@@ -72,6 +72,8 @@ function maskConfig(config: AppConfig): Record<string, unknown> {
   if (masked.managementApi) {
     const managementApi = { ...(masked.managementApi as Record<string, unknown>) }
     managementApi.managementApiSecret = '***'
+    if (managementApi.passwordHash) managementApi.passwordHash = '***'
+    if (managementApi.passwordSalt) managementApi.passwordSalt = '***'
     masked.managementApi = managementApi
   }
 

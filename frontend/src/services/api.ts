@@ -46,8 +46,13 @@ apiClient.interceptors.response.use(
     return response.data
   },
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      // Handle unauthorized (clear secret, maybe redirect to login)
+    const url: string = error.config?.url || ''
+    const isAuthEndpoint = url.startsWith('/auth/')
+    if ((error.response?.status === 401 || error.response?.status === 403) && !isAuthEndpoint) {
+      // Existing session was rejected -> drop the cached secret and ask
+      // the AuthProvider to surface the login screen again. Auth-endpoint
+      // errors are bubbled through unchanged so the login form can show a
+      // proper "incorrect password" message.
       localStorage.removeItem('managementApiSecret')
       window.dispatchEvent(new Event('management-api-unauthorized'))
     }
@@ -60,6 +65,30 @@ apiClient.interceptors.response.use(
  * Replaces the old window.electronAPI with HTTP client methods
  */
 export const ApiService = {
+  /**
+   * Authentication / first-run flow.
+   *
+   * On first launch the operator opens the web UI and creates a password
+   * via `auth.setup`. Subsequent launches require `auth.login`. Both
+   * endpoints return a long-lived management secret that the SPA stores
+   * in localStorage and sends as `Authorization: Bearer <secret>`.
+   */
+  auth: {
+    status: (): Promise<{
+      firstRun: boolean
+      requirePassword: boolean
+      passwordSetAt: number | null
+    }> => apiClient.get('/auth/status'),
+    setup: (password: string): Promise<{ secret: string }> =>
+      apiClient.post('/auth/setup', { password }),
+    login: (password: string): Promise<{ secret: string }> =>
+      apiClient.post('/auth/login', { password }),
+    changePassword: (
+      input: { oldPassword?: string; newPassword: string; rotateSecret?: boolean },
+    ): Promise<{ secret: string; rotated: boolean }> =>
+      apiClient.post('/auth/change_password', input),
+  },
+
   // Proxy Service
   proxy: {
     start: (port?: number, host?: string) => apiClient.post('/proxy/start', { port, host }),
