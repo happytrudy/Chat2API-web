@@ -295,14 +295,44 @@ router.post('/accounts/validate_token', managementAuthMiddleware, async (ctx: Co
         supportedModels: builtinConfig.supportedModels,
       }
       const result = await validateCredentials(tempProvider as any, body.credentials)
+      
+      // Map to the shape the frontend expects
+      const response: any = {
+        valid: result.valid,
+        error: result.error,
+      }
+      if (result.accountInfo) {
+        response.userInfo = {
+          name: result.accountInfo.name,
+          email: result.accountInfo.email,
+          quota: result.accountInfo.quota,
+          used: result.accountInfo.used,
+        }
+      }
+      
       ctx.set('Content-Type', 'application/json')
-      ctx.body = createSuccessResponse(result)
+      ctx.body = createSuccessResponse(response)
       return
     }
 
     const result = await validateCredentials(provider, body.credentials)
+    
+    // Map to the shape the frontend expects: { valid, error?, userInfo? }
+    const response: any = {
+      valid: result.valid,
+      error: result.error,
+    }
+    if (result.accountInfo) {
+      response.userInfo = {
+        name: result.accountInfo.name,
+        email: result.accountInfo.email,
+        quota: result.accountInfo.quota,
+        used: result.accountInfo.used,
+      }
+    }
+    
     ctx.set('Content-Type', 'application/json')
-    ctx.body = createSuccessResponse(result)
+    ctx.body = createSuccessResponse(response)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to validate token'
     ctx.status = 500
