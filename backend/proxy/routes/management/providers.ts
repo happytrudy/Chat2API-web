@@ -95,6 +95,36 @@ router.post('/check_all_status', async (ctx: Context) => {
   }
 })
 
+router.post('/import', async (ctx: Context) => {
+  try {
+    const body = ctx.request.body as { data: string }
+    if (!body.data) {
+      ctx.status = 400
+      ctx.body = createErrorResponse('invalid_request', 'Missing data field')
+      return
+    }
+    const providerData = JSON.parse(body.data)
+    const provider = ProviderManager.create({
+      id: providerData.id,
+      name: providerData.name,
+      type: providerData.type || 'custom',
+      authType: providerData.authType,
+      apiEndpoint: providerData.apiEndpoint,
+      chatPath: providerData.chatPath,
+      headers: providerData.headers || {},
+      description: providerData.description,
+      supportedModels: providerData.supportedModels,
+    })
+    ctx.status = 201
+    ctx.set('Content-Type', 'application/json')
+    ctx.body = createSuccessResponse(provider)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to import provider'
+    ctx.status = 400
+    ctx.body = createErrorResponse('invalid_request', errorMessage)
+  }
+})
+
 router.post('/:id/check_status', async (ctx: Context) => {
   try {
     const id = ctx.params.id
@@ -274,6 +304,198 @@ router.delete('/:id', async (ctx: Context) => {
     ctx.body = createErrorResponse('internal_error', errorMessage)
   }
 })
+
+// ==================== Model Management Routes ====================
+
+router.get('/:id/models/effective', async (ctx: Context) => {
+  try {
+    const id = ctx.params.id
+    const provider = ProviderManager.getById(id)
+    if (!provider) {
+      ctx.status = 404
+      ctx.body = createErrorResponse('not_found', 'Provider not found')
+      return
+    }
+    const { storeManager } = await import('../../../store/store')
+    const models = storeManager.getEffectiveModels(id)
+    ctx.set('Content-Type', 'application/json')
+    ctx.body = createSuccessResponse(models)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to get effective models'
+    ctx.status = 500
+    ctx.body = createErrorResponse('internal_error', errorMessage)
+  }
+})
+
+router.post('/:id/models/custom', async (ctx: Context) => {
+  try {
+    const id = ctx.params.id
+    const provider = ProviderManager.getById(id)
+    if (!provider) {
+      ctx.status = 404
+      ctx.body = createErrorResponse('not_found', 'Provider not found')
+      return
+    }
+    const { storeManager } = await import('../../../store/store')
+    const body = ctx.request.body as { displayName: string; actualModelId: string }
+    if (!body.displayName || !body.actualModelId) {
+      ctx.status = 400
+      ctx.body = createErrorResponse('invalid_request', 'Missing displayName or actualModelId')
+      return
+    }
+    const models = storeManager.addCustomModel(id, {
+      displayName: body.displayName,
+      actualModelId: body.actualModelId,
+    })
+    ctx.status = 201
+    ctx.set('Content-Type', 'application/json')
+    ctx.body = createSuccessResponse(models)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to add custom model'
+    ctx.status = 400
+    ctx.body = createErrorResponse('invalid_request', errorMessage)
+  }
+})
+
+router.delete('/:id/models/:modelName', async (ctx: Context) => {
+  try {
+    const id = ctx.params.id
+    const modelName = decodeURIComponent(ctx.params.modelName)
+    const provider = ProviderManager.getById(id)
+    if (!provider) {
+      ctx.status = 404
+      ctx.body = createErrorResponse('not_found', 'Provider not found')
+      return
+    }
+    const { storeManager } = await import('../../../store/store')
+    const models = storeManager.removeModel(id, modelName)
+    ctx.set('Content-Type', 'application/json')
+    ctx.body = createSuccessResponse(models)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to remove model'
+    ctx.status = 500
+    ctx.body = createErrorResponse('internal_error', errorMessage)
+  }
+})
+
+router.post('/:id/models/reset', async (ctx: Context) => {
+  try {
+    const id = ctx.params.id
+    const provider = ProviderManager.getById(id)
+    if (!provider) {
+      ctx.status = 404
+      ctx.body = createErrorResponse('not_found', 'Provider not found')
+      return
+    }
+    const { storeManager } = await import('../../../store/store')
+    const models = storeManager.resetModels(id)
+    ctx.set('Content-Type', 'application/json')
+    ctx.body = createSuccessResponse(models)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to reset models'
+    ctx.status = 500
+    ctx.body = createErrorResponse('internal_error', errorMessage)
+  }
+})
+
+router.post('/:id/sync_models', async (ctx: Context) => {
+  try {
+    const id = ctx.params.id
+    const provider = ProviderManager.getById(id)
+    if (!provider) {
+      ctx.status = 404
+      ctx.body = createErrorResponse('not_found', 'Provider not found')
+      return
+    }
+    // Sync is effectively a no-op for builtin providers (models come from config)
+    ctx.set('Content-Type', 'application/json')
+    ctx.body = createSuccessResponse({ synced: true, models: provider.supportedModels || [] })
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to sync models'
+    ctx.status = 500
+    ctx.body = createErrorResponse('internal_error', errorMessage)
+  }
+})
+
+router.post('/:id/update_models', async (ctx: Context) => {
+  try {
+    const id = ctx.params.id
+    const provider = ProviderManager.getById(id)
+    if (!provider) {
+      ctx.status = 404
+      ctx.body = createErrorResponse('not_found', 'Provider not found')
+      return
+    }
+    // For builtin providers, refresh models from the builtin config
+    if (provider.type === 'builtin') {
+      const { getBuiltinProvider } = await import('../../../providers/builtin')
+      const builtinConfig = getBuiltinProvider(id)
+      if (builtinConfig) {
+        ProviderManager.update(id, {
+          supportedModels: builtinConfig.supportedModels,
+          modelMappings: builtinConfig.modelMappings,
+        })
+      }
+    }
+    const updated = ProviderManager.getById(id)
+    ctx.set('Content-Type', 'application/json')
+    ctx.body = createSuccessResponse(updated)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update models'
+    ctx.status = 500
+    ctx.body = createErrorResponse('internal_error', errorMessage)
+  }
+})
+
+router.post('/:id/duplicate', async (ctx: Context) => {
+  try {
+    const id = ctx.params.id
+    const provider = ProviderManager.getById(id)
+    if (!provider) {
+      ctx.status = 404
+      ctx.body = createErrorResponse('not_found', 'Provider not found')
+      return
+    }
+    const duplicate = ProviderManager.create({
+      name: `${provider.name} (Copy)`,
+      type: provider.type,
+      authType: provider.authType,
+      apiEndpoint: provider.apiEndpoint,
+      chatPath: provider.chatPath,
+      headers: provider.headers,
+      description: provider.description,
+      icon: provider.icon,
+      supportedModels: provider.supportedModels,
+    })
+    ctx.status = 201
+    ctx.set('Content-Type', 'application/json')
+    ctx.body = createSuccessResponse(duplicate)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to duplicate provider'
+    ctx.status = 500
+    ctx.body = createErrorResponse('internal_error', errorMessage)
+  }
+})
+
+router.post('/:id/export', async (ctx: Context) => {
+  try {
+    const id = ctx.params.id
+    const provider = ProviderManager.getById(id)
+    if (!provider) {
+      ctx.status = 404
+      ctx.body = createErrorResponse('not_found', 'Provider not found')
+      return
+    }
+    ctx.set('Content-Type', 'application/json')
+    ctx.body = createSuccessResponse(JSON.stringify(provider, null, 2))
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to export provider'
+    ctx.status = 500
+    ctx.body = createErrorResponse('internal_error', errorMessage)
+  }
+})
+
+// ==================== Status Routes ====================
 
 router.patch('/:id/status', async (ctx: Context) => {
   try {
