@@ -213,6 +213,14 @@ export interface ManagementApiConfig {
   enableManagementApi: boolean
   managementApiSecret: string
   managementApiPort?: number
+  /** Whether the operator has completed the initial password setup. */
+  firstRunCompleted?: boolean
+  /** scrypt-derived password hash (hex). Never returned to clients. */
+  passwordHash?: string
+  /** scrypt salt (hex) used together with passwordHash. Never returned to clients. */
+  passwordSalt?: string
+  /** When the password was last set/changed (ms since epoch). */
+  passwordSetAt?: number
 }
 
 export interface ManagementApiResponse<T = unknown> {
