@@ -249,6 +249,7 @@ export interface ManagementApiPaginatedResponse<T> {
 }
 
 export interface CreateProviderRequest {
+  id?: string
   name: string
   type: ProviderType
   authType: AuthType

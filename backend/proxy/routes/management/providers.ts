@@ -158,6 +158,7 @@ router.post('/', async (ctx: Context) => {
     }
 
     const provider = ProviderManager.create({
+      id: request.id,
       name: request.name,
       type: request.type || 'custom',
       authType: request.authType,
