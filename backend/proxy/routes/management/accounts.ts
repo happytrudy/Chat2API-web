@@ -17,21 +17,9 @@ import type {
 
 const router = new Router({ prefix: '/v0/management' })
 
-/**
- * Mask sensitive credential fields
- * Replaces all credential values with '***' for security
- */
-function maskCredentials(account: Account): Account {
-  const maskedCredentials: Record<string, string> = {}
-  for (const key of Object.keys(account.credentials)) {
-    maskedCredentials[key] = '***'
-  }
-  
-  return {
-    ...account,
-    credentials: maskedCredentials,
-  }
-}
+// Credentials are returned in cleartext to the management UI.
+// The management API itself is protected by bearer auth so only
+// authenticated operators can see them.
 
 /**
  * Create error response
@@ -62,11 +50,10 @@ function createSuccessResponse<T>(data: T): ManagementApiResponse<T> {
  */
 router.get('/accounts', managementAuthMiddleware, async (ctx: Context) => {
   try {
-    const accounts = AccountManager.getAll(false)
-    const maskedAccounts = accounts.map(maskCredentials)
+    const accounts = AccountManager.getAll(true)
     
     ctx.set('Content-Type', 'application/json')
-    ctx.body = createSuccessResponse(maskedAccounts)
+    ctx.body = createSuccessResponse(accounts)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to get accounts'
     ctx.status = 500
@@ -81,11 +68,10 @@ router.get('/accounts', managementAuthMiddleware, async (ctx: Context) => {
 router.get('/providers/:providerId/accounts', managementAuthMiddleware, async (ctx: Context) => {
   try {
     const providerId = ctx.params.providerId
-    const accounts = AccountManager.getByProviderId(providerId, false)
-    const maskedAccounts = accounts.map(maskCredentials)
+    const accounts = AccountManager.getByProviderId(providerId, true)
     
     ctx.set('Content-Type', 'application/json')
-    ctx.body = createSuccessResponse(maskedAccounts)
+    ctx.body = createSuccessResponse(accounts)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to get accounts by provider'
     ctx.status = 500
@@ -101,7 +87,7 @@ router.get('/providers/:providerId/accounts', managementAuthMiddleware, async (c
 router.get('/accounts/:id', managementAuthMiddleware, async (ctx: Context) => {
   try {
     const id = ctx.params.id
-    const account = AccountManager.getById(id, false)
+    const account = AccountManager.getById(id, true)
     
     if (!account) {
       ctx.status = 404
@@ -109,9 +95,8 @@ router.get('/accounts/:id', managementAuthMiddleware, async (ctx: Context) => {
       return
     }
     
-    const maskedAccount = maskCredentials(account)
     ctx.set('Content-Type', 'application/json')
-    ctx.body = createSuccessResponse(maskedAccount)
+    ctx.body = createSuccessResponse(account)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to get account'
     ctx.status = 500
@@ -153,10 +138,12 @@ router.post('/accounts', managementAuthMiddleware, async (ctx: Context) => {
       dailyLimit: request.dailyLimit,
     })
     
-    const maskedAccount = maskCredentials(account)
+    // Return the account with the original (unencrypted) credentials
+    // so the frontend can display them immediately after creation
+    const responseAccount = { ...account, credentials: request.credentials }
     ctx.status = 201
     ctx.set('Content-Type', 'application/json')
-    ctx.body = createSuccessResponse(maskedAccount)
+    ctx.body = createSuccessResponse(responseAccount)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to create account'
     
@@ -212,9 +199,10 @@ router.put('/accounts/:id', managementAuthMiddleware, async (ctx: Context) => {
       return
     }
     
-    const maskedAccount = maskCredentials(updatedAccount)
+    // Re-fetch with decrypted credentials for the response
+    const freshAccount = AccountManager.getById(id, true)
     ctx.set('Content-Type', 'application/json')
-    ctx.body = createSuccessResponse(maskedAccount)
+    ctx.body = createSuccessResponse(freshAccount || updatedAccount)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to update account'
     ctx.status = 500
@@ -348,7 +336,7 @@ router.post('/accounts/:id/validate', managementAuthMiddleware, async (ctx: Cont
   try {
     const id = ctx.params.id
     
-    const existingAccount = AccountManager.getById(id, false)
+    const existingAccount = AccountManager.getById(id, true)
     if (!existingAccount) {
       ctx.status = 404
       ctx.body = createErrorResponse('account_not_found', `Account not found: ${id}`)
@@ -357,8 +345,22 @@ router.post('/accounts/:id/validate', managementAuthMiddleware, async (ctx: Cont
     
     const validationResult: ValidationResult = await AccountManager.validate(id)
     
+    // Map to the shape the frontend expects
+    const response: any = {
+      valid: validationResult.valid,
+      error: validationResult.error,
+    }
+    if (validationResult.accountInfo) {
+      response.userInfo = {
+        name: validationResult.accountInfo.name,
+        email: validationResult.accountInfo.email,
+        quota: validationResult.accountInfo.quota,
+        used: validationResult.accountInfo.used,
+      }
+    }
+    
     ctx.set('Content-Type', 'application/json')
-    ctx.body = createSuccessResponse(validationResult)
+    ctx.body = createSuccessResponse(response)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to validate account'
     ctx.status = 500

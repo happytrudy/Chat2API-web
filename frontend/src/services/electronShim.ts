@@ -120,7 +120,7 @@ export function createElectronApiShim(): ElectronAPI {
       },
       validate: async (id) => {
         const res: any = await ApiService.accounts.validate(id)
-        return res?.success ?? false
+        return res?.valid ?? false
       },
       validateToken: (providerId, credentials) =>
         ApiService.accounts.validateToken(providerId, credentials) as any,

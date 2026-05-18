@@ -951,12 +951,12 @@ export function AddProviderDialog({
           </div>
         )}
 
-        {validationResult.valid && validationResult.userInfo && (
+        {validationResult.valid && (
           <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 p-3 rounded-lg mt-4">
             <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
             <div>
               <span className="font-medium">{t('providers.validationSuccess')}</span>
-              {validationResult.userInfo.quota !== undefined && (
+              {validationResult.userInfo?.quota !== undefined && (
                 <span className="ml-2">
                   {t('providers.quota')}: {validationResult.userInfo.used || 0} / {validationResult.userInfo.quota}
                 </span>
