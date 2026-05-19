@@ -225,10 +225,15 @@ export class ProxyServer {
       this.router.use(route.allowedMethods())
     }
 
-    this.router.get('/', async (ctx) => {
-      // When the SPA is mounted, let the static fallback render index.html.
+    this.router.get('/', async (ctx, next) => {
+      // When the SPA is mounted, hand off to the static fallback so it
+      // can serve index.html (and let client-side routing take over).
+      // We MUST call next(): koa-router will not run any later middleware
+      // if the handler returns without invoking it, so the previous
+      // `ctx.status = 404; return` short-circuited the SPA fallback and
+      // browsers got a bare 404 at the site root.
       if (this.staticFrontendDir) {
-        ctx.status = 404
+        await next()
         return
       }
       ctx.body = {
