@@ -364,11 +364,19 @@ export function AddAccountDialog({
                         // Map raw OAuth credentials to the provider's credential
                         // field names, then pre-fill the form so the user can
                         // review (and adjust the account name) before saving.
+                        console.log('[AddAccountDialog] OAuth raw creds:', JSON.stringify(creds))
                         const mapped = mapOAuthCredentials(provider.id, creds)
-                        setCredentials(mapped)
-                        if (accountInfo?.name) setName(accountInfo.name)
-                        setValidationResult({ valid: true, userInfo: accountInfo })
+                        console.log('[AddAccountDialog] Mapped creds:', JSON.stringify(mapped))
+                        // Switch tab FIRST so the credential fields are mounted,
+                        // then set credentials so React renders them filled.
                         setActiveTab('manual')
+                        // Use a microtask to ensure the tab content has mounted
+                        // before we update the credential state that fills the inputs.
+                        setTimeout(() => {
+                          setCredentials(mapped)
+                          if (accountInfo?.name) setName(accountInfo.name)
+                          setValidationResult({ valid: true, userInfo: accountInfo })
+                        }, 0)
                       }}
                     />
                   )}
