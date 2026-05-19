@@ -28,7 +28,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { ApiService } from '@/services/api'
-import { BookmarkletPanel } from './BookmarkletPanel'
+import { ConsoleScriptPanel } from './ConsoleScriptPanel'
 
 type StorageType = 'localStorage' | 'cookie' | 'network'
 
@@ -308,8 +308,8 @@ export function TokenExtractionGuide({
 
   return (
     <div className="space-y-4">
-      {/* ── Recommended: Bookmarklet ── */}
-      <BookmarkletPanel
+      {/* ── Recommended: Console Script (one-click copy-paste) ── */}
+      <ConsoleScriptPanel
         providerId={providerId}
         providerType={providerType}
         providerName={providerName}
@@ -328,7 +328,7 @@ export function TokenExtractionGuide({
         ) : (
           <ChevronRight className="h-3.5 w-3.5" />
         )}
-        {t('oauth.bookmarklet.manualFallbackAdvanced')}
+        {t('oauth.console.manualFallback')}
       </button>
 
       {showManual && (
