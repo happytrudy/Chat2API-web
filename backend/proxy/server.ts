@@ -80,7 +80,21 @@ export class ProxyServer {
     this.app.use(async (ctx, next) => {
       const origin = ctx.get('Origin')
 
-      if (ctx.path.startsWith('/v0/management')) {
+      // The bookmarklet ingest endpoint is intentionally cross-origin:
+      // operators run the bookmarklet from the provider's own page
+      // (e.g. https://chatglm.cn) and POST the captured token back to
+      // this server. The endpoint authenticates with a one-shot ticket
+      // baked into the bookmarklet, so it does not (and must not) accept
+      // cookies. We therefore allow any origin unconditionally — anything
+      // narrower would force every operator to whitelist every provider
+      // domain in CHAT2API_CORS_ORIGINS, which defeats the whole point.
+      const isBookmarkletIngest =
+        ctx.path === '/v0/management/oauth/bookmarklet/ingest'
+
+      if (isBookmarkletIngest) {
+        ctx.set('Access-Control-Allow-Origin', '*')
+        ctx.set('Vary', 'Origin')
+      } else if (ctx.path.startsWith('/v0/management')) {
         // Management API: only allow explicitly configured origins.
         // CHAT2API_CORS_ORIGINS accepts a comma-separated list (e.g. "https://admin.example.com,http://localhost:3000").
         // If unset, only same-origin requests (no Origin header) are permitted.
