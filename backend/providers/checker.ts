@@ -137,14 +137,13 @@ export class ProviderChecker {
       case 'kimi':
         return this.checkKimiToken(account.credentials.token)
       case 'minimax':
-        return this.checkMiniMaxToken(
-          account.credentials.realUserID || '',
-          account.credentials.token
-        )
+        return this.checkMiniMaxToken(account.credentials)
       case 'qwen':
         return this.checkQwenToken(account.credentials.ticket)
       case 'qwen-ai':
         return this.checkQwenAiToken(account.credentials.token)
+      case 'zai':
+        return this.checkZaiToken(account.credentials.token || account.credentials.accessToken || account.credentials.jwt || account.credentials.ticket)
       case 'perplexity':
         return this.checkPerplexityToken(account.credentials.sessionToken || account.credentials.token)
       case 'mimo':
@@ -370,44 +369,18 @@ export class ProviderChecker {
   }
 
   private static async checkMiniMaxToken(
-    _realUserID: string,
-    token: string
+    credentials: Record<string, string>,
   ): Promise<TokenCheckResult> {
     try {
-      console.log('[MiniMax] Validating Token (length:', token.length, ')')
+      const { resolveMiniMaxCredentials } = await import('../shared/minimaxCredentials')
+      const resolved = resolveMiniMaxCredentials(credentials)
+      if (resolved.error) {
+        return { valid: false, error: resolved.error }
+      }
+
+      const { jwtToken, realUserID } = resolved
       
       const crypto = await import('crypto')
-      
-      let realUserID = ''
-      let jwtToken = token
-      
-      if (token.includes('+')) {
-        const parts = token.split('+')
-        realUserID = parts[0]
-        jwtToken = parts[1]
-      } else {
-        try {
-          const parts = token.split('.')
-          if (parts.length >= 2) {
-            let payload = parts[1]
-            const padding = payload.length % 4
-            if (padding > 0) {
-              payload += '='.repeat(4 - padding)
-            }
-            payload = payload.replace(/-/g, '+').replace(/_/g, '/')
-            const decoded = Buffer.from(payload, 'base64').toString('utf8')
-            const data = JSON.parse(decoded)
-            realUserID = data.user?.id || data.id || data.sub || ''
-            console.log('[MiniMax] Extracted userId from token: (set)')
-          }
-        } catch (e) {
-          console.log('[MiniMax] Failed to parse JWT:', e)
-        }
-      }
-      
-      if (!realUserID) {
-        return { valid: false, error: 'Cannot extract user ID from token' }
-      }
       
       const uuid = realUserID
       const unix = Date.now().toString()
@@ -457,9 +430,6 @@ export class ProviderChecker {
           validateStatus: () => true,
         }
       )
-      
-      console.log('[MiniMax] Response status:', response.status)
-      console.log('[MiniMax] Response data:', JSON.stringify(response.data, null, 2))
       
       if (response.status === 200 && response.data?.data?.deviceIDStr) {
         const userInfo = response.data.data.userInfo
@@ -575,6 +545,45 @@ export class ProviderChecker {
           ? error.message
           : 'Connection failed',
       }
+    }
+  }
+
+  private static checkZaiToken(token: string): TokenCheckResult {
+    if (!token) {
+      return { valid: false, error: 'Token cannot be empty' }
+    }
+
+    if (!token.startsWith('eyJ') || token.split('.').length !== 3) {
+      return { valid: false, error: 'Token is invalid, please use the JWT token from chat.z.ai cookies or localStorage' }
+    }
+
+    try {
+      const parts = token.split('.')
+      let payload = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+      const padding = payload.length % 4
+      if (padding > 0) {
+        payload += '='.repeat(4 - padding)
+      }
+      const data = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'))
+
+      if (typeof data.email === 'string' && data.email.includes('@guest.com')) {
+        return { valid: false, error: 'Guest account not allowed, please login with a real Z.ai account' }
+      }
+
+      const userId = data.id || data.user_id || data.uid || data.sub
+      if (!userId) {
+        return { valid: false, error: 'Token payload does not contain a user id' }
+      }
+
+      return {
+        valid: true,
+        userInfo: {
+          name: data.name || data.email || userId,
+          email: data.email,
+        },
+      }
+    } catch {
+      return { valid: false, error: 'Invalid JWT token' }
     }
   }
 

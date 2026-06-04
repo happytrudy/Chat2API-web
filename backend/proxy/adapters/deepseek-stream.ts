@@ -40,6 +40,8 @@ export class DeepSeekStreamHandler {
   private reasoningEffort: string | undefined
   private isDone: boolean = false
   private semanticModel: string
+  private contentEmitted: boolean = false
+  private sseEventCount: number = 0
 
   constructor(
     model: string,
@@ -210,27 +212,50 @@ export class DeepSeekStreamHandler {
       buffer = lines.pop() || ''
 
       for (const line of lines) {
-        if (!line.trim() || !line.startsWith('data:')) continue
+        const trimmedLine = line.trim()
+        if (!trimmedLine) continue
 
-        const data = line.slice(5).trim()
-        if (data === '[DONE]') {
-          console.log(`[DeepSeek Stream] Received [DONE] signal after ${chunkCount} chunks`)
-          this.handleDone(transStream, isFoldModel, isSearchSilentModel)
-          return
-        }
+        if (trimmedLine.startsWith('data:')) {
+          const data = trimmedLine.slice(5).trim()
+          if (data === '[DONE]') {
+            console.log(`[DeepSeek Stream] Received [DONE] signal after ${chunkCount} chunks`)
+            this.handleDone(transStream, isFoldModel, isSearchSilentModel)
+            continue
+          }
 
-        const parsed = this.parseSSE(data)
-        if (!parsed) {
-          console.log('[DeepSeek Stream] Failed to parse SSE data:', data.substring(0, 100))
+          const parsed = this.parseSSE(data)
+          if (!parsed) {
+            console.log('[DeepSeek Stream] Failed to parse SSE data:', data.substring(0, 200))
+            continue
+          }
+
+          this.sseEventCount++
+          this.processChunk(parsed, transStream, isThinkingModel, isSilentModel, isFoldModel, isSearchSilentModel)
           continue
         }
 
-        this.processChunk(parsed, transStream, isThinkingModel, isSilentModel, isFoldModel, isSearchSilentModel)
+        // Some proxies return raw JSON lines without the data: prefix
+        if (trimmedLine.startsWith('{')) {
+          const parsed = this.parseSSE(trimmedLine)
+          if (parsed) {
+            this.sseEventCount++
+            this.processChunk(parsed, transStream, isThinkingModel, isSilentModel, isFoldModel, isSearchSilentModel)
+          }
+        }
       }
     })
 
     stream.on('end', () => {
-      console.log(`[DeepSeek Stream] Stream ended after ${chunkCount} chunks`)
+      console.log(
+        `[DeepSeek Stream] Stream ended after ${chunkCount} chunks, ` +
+        `sseEvents=${this.sseEventCount}, contentEmitted=${this.contentEmitted}`
+      )
+      if (!this.contentEmitted && buffer.trim()) {
+        console.warn('[DeepSeek Stream] Unparsed trailing buffer:', buffer.substring(0, 500))
+      }
+      if (!this.contentEmitted && this.sseEventCount === 0) {
+        console.warn('[DeepSeek Stream] No SSE events parsed — upstream may have returned an empty or non-SSE body')
+      }
       this.handleDone(transStream, isFoldModel, isSearchSilentModel)
     })
 
@@ -331,6 +356,15 @@ export class DeepSeekStreamHandler {
       return
     }
 
+    // Incremental fragment content patches (e.g. response/fragments/0/content)
+    if (chunk.p && /^response\/fragments\/-?\d+\/content$/.test(chunk.p) && typeof chunk.v === 'string') {
+      if (!this.currentPath) {
+        this.currentPath = 'content'
+      }
+      this.sendContent(chunk.v, this.currentPath, transStream, isSilentModel, isFoldModel, isSearchSilentModel)
+      return
+    }
+
     let content = ''
     if (typeof chunk.v === 'string') {
       content = chunk.v
@@ -390,6 +424,7 @@ export class DeepSeekStreamHandler {
       for (const chunk of chunks) {
         transStream.write(`data: ${JSON.stringify(chunk)}\n\n`)
         this.isFirstChunk = false
+        this.contentEmitted = true
       }
       
       // If we're buffering a tool call or already emitted tool calls, don't send as regular content
@@ -441,6 +476,7 @@ export class DeepSeekStreamHandler {
     if (shouldSendDelta && (delta.content !== undefined || delta.reasoning_content !== undefined)) {
       transStream.write(this.createChunk(delta))
       this.isFirstChunk = false
+      this.contentEmitted = true
     }
   }
 

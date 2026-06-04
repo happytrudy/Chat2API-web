@@ -187,8 +187,9 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
     try {
       set({ isLoading: true, error: null })
       const currentConfig = get().appConfig
-      
-      let newConfig = { ...currentConfig, ...config } as AppConfig
+      if (!currentConfig) {
+        throw new Error('App config not loaded')
+      }
       
       // Send updates to backend
       const updatedConfig = await ApiService.config.update(config)

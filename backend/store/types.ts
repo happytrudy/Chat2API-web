@@ -707,7 +707,7 @@ export const DEFAULT_CONTEXT_MANAGEMENT_CONFIG: ContextManagementConfig = {
 export const DEFAULT_REQUEST_LOG_CONFIG: RequestLogConfig = {
   enabled: true,
   maxEntries: 200,
-  includeBodies: false,
+  includeBodies: true,
   maxBodyChars: 8000,
   redactSensitiveData: true,
 }

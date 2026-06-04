@@ -122,11 +122,6 @@ export class ZaiAdapter {
     return credentials.token || credentials.accessToken || credentials.jwt || ''
   }
 
-  private getCaptchaVerifyParam(): string | undefined {
-    const credentials = this.account.credentials
-    return credentials.captcha_verify_param || credentials.captchaVerifyParam || undefined
-  }
-
   private async ensureToken(): Promise<string> {
     const token = this.getToken()
     if (token) {
@@ -464,11 +459,6 @@ export class ZaiAdapter {
         title_generation: true,
         tags_generation: true,
       },
-    }
-
-    const captchaVerifyParam = this.getCaptchaVerifyParam()
-    if (captchaVerifyParam) {
-      requestBody.captcha_verify_param = captchaVerifyParam
     }
 
     console.log('[Z.ai] Sending chat request...')

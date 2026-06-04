@@ -330,7 +330,7 @@
     "description": "Z.ai - Free AI Chatbot powered by GLM-5 and GLM-4.7",
     "token": "Access Token",
     "tokenPlaceholder": "Enter Z.ai JWT Token",
-    "tokenHelp": "Get token from Z.ai web version, found in browser DevTools Application -> Cookie, starts with \"eyJ...\""
+    "tokenHelp": "Get the token from Z.ai web in browser DevTools Application -> Cookies. It is usually named token and starts with \"eyJ...\"."
   },
   "mimo": {
     "name": "Mimo",
@@ -496,12 +496,7 @@
     "restartNow": "Restart Now",
     "restarting": "Restarting...",
     "proxyRestarted": "Proxy service has been restarted with new configuration",
-    "proxyRestartFailed": "Failed to restart proxy service",
-    "validationFailed": "Validation Failed",
-    "fixFormErrors": "Please fix the errors in the form",
-    "proxyConfigUpdated": "Proxy configuration has been updated",
-    "configSaveFailed": "Failed to save configuration",
-    "saving": "Saving..."
+    "proxyRestartFailed": "Failed to restart proxy service"
   },
   "apiKeys": {
     "title": "API Key Management",

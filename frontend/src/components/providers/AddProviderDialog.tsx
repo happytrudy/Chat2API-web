@@ -58,10 +58,7 @@ const providerIcons: Record<string, string> = {
 }
 
 function mapOAuthCredentials(providerId: string | undefined, credentials: Record<string, string>): Record<string, string> {
-  console.log('[mapOAuthCredentials] Input providerId:', providerId, 'credentials:', JSON.stringify(credentials, null, 2))
-  
   if (!providerId) {
-    console.log('[mapOAuthCredentials] No providerId, returning as-is')
     return credentials
   }
 
@@ -70,7 +67,7 @@ function mapOAuthCredentials(providerId: string | undefined, credentials: Record
     'deepseek': 'userToken',
     'qwen': 'tongyi_sso_ticket',
     'qwen-ai': 'tongyi_sso_ticket',
-    'zai': 'tongyi_sso_ticket',
+    'zai': 'token',
     'perplexity': '__Secure-next-auth.session-token',
   }
 
@@ -79,7 +76,7 @@ function mapOAuthCredentials(providerId: string | undefined, credentials: Record
     'deepseek': 'token',
     'qwen': 'ticket',
     'qwen-ai': 'ticket',
-    'zai': 'ticket',
+    'zai': 'token',
     'perplexity': 'sessionToken',
   }
 
@@ -98,53 +95,41 @@ function mapOAuthCredentials(providerId: string | undefined, credentials: Record
           console.error('[mapOAuthCredentials] Error parsing JSON token:', e)
         }
       }
-      console.log('[mapOAuthCredentials] Mapped', oauthKey, 'to', fieldName)
       return { [fieldName]: tokenValue }
     }
   }
 
   if (providerId === 'perplexity' && credentials['__Secure-next-auth.session-token']) {
-    console.log('[mapOAuthCredentials] Mapped Perplexity secure token')
     return { sessionToken: credentials['__Secure-next-auth.session-token'] }
   }
   if (providerId === 'perplexity' && credentials['next-auth.session-token']) {
-    console.log('[mapOAuthCredentials] Mapped Perplexity session token')
     return { sessionToken: credentials['next-auth.session-token'] }
   }
 
   if (providerId === 'mimo') {
-    console.log('[mapOAuthCredentials] Processing Mimo credentials')
     const result: Record<string, string> = {}
     
     if (credentials['serviceToken']) {
       result['service_token'] = credentials['serviceToken']
-      console.log('[mapOAuthCredentials] Mapped serviceToken -> service_token')
     } else if (credentials['service_token']) {
       result['service_token'] = credentials['service_token']
-      console.log('[mapOAuthCredentials] Using existing service_token')
     }
     
     if (credentials['userId']) {
       result['user_id'] = credentials['userId']
-      console.log('[mapOAuthCredentials] Mapped userId -> user_id')
     } else if (credentials['user_id']) {
       result['user_id'] = credentials['user_id']
-      console.log('[mapOAuthCredentials] Using existing user_id')
     }
     
     if (credentials['xiaomichatbot_ph']) {
       result['ph_token'] = credentials['xiaomichatbot_ph']
-      console.log('[mapOAuthCredentials] Mapped xiaomichatbot_ph -> ph_token')
     } else if (credentials['ph_token']) {
       result['ph_token'] = credentials['ph_token']
-      console.log('[mapOAuthCredentials] Using existing ph_token')
     }
     
-    console.log('[mapOAuthCredentials] Mimo result:', JSON.stringify(result, null, 2))
     return result
   }
 
-  console.log('[mapOAuthCredentials] No special mapping needed, returning as-is')
   return credentials
 }
 
@@ -889,7 +874,7 @@ export function AddProviderDialog({
   )
 
   const renderStep2 = () => (
-    <div className="mt-4 space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
         <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
           {providerIcons[selectedProviderData?.id || ''] ? (
@@ -910,7 +895,7 @@ export function AddProviderDialog({
         </div>
       </div>
 
-      <div className="border-t pt-4">
+      <div className="border-t pt-3">
         <h4 className="text-sm font-medium mb-3">{t('providers.credentials')}</h4>
         
         {supportsOAuth ? (
@@ -970,8 +955,8 @@ export function AddProviderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[78dvh] flex-col gap-3 overflow-hidden p-4 sm:max-w-[600px]">
+        <DialogHeader className="shrink-0 pr-6">
           <DialogTitle>
             {step === 1 ? t('providers.addProvider') : t('providers.addAccount')}
           </DialogTitle>
@@ -983,9 +968,11 @@ export function AddProviderDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {step === 1 ? renderStep1() : renderStep2()}
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
+          {step === 1 ? renderStep1() : renderStep2()}
+        </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t pt-3">
           {step === 1 ? (
             <>
               <Button variant="outline" onClick={() => onOpenChange(false)}>

@@ -1,3 +1,8 @@
+import type {
+  LegacyToolPromptConfig,
+  ToolCallingConfig,
+} from './toolCalling'
+
 export type AccountStatus = 'active' | 'inactive' | 'expired' | 'error'
 
 export type ProviderStatus = 'online' | 'offline' | 'unknown'
@@ -68,6 +73,14 @@ export interface Provider {
   modelMappings?: Record<string, string>
   status?: ProviderStatus
   lastStatusCheck?: number
+}
+
+export interface BuiltinProviderConfig extends Omit<Provider, 'createdAt' | 'updatedAt'> {
+  credentialFields: CredentialField[]
+  tokenCheckEndpoint?: string
+  tokenCheckMethod?: 'GET' | 'POST'
+  modelsApiEndpoint?: string
+  modelsApiHeaders?: Record<string, string>
 }
 
 export interface ModelMapping {
@@ -406,4 +419,52 @@ export interface EffectiveModel {
   displayName: string
   actualModelId: string
   isCustom: boolean
+}
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  content: string
+  timestamp: number
+  tokenCount?: number
+  toolCallId?: string
+}
+
+export type SessionStatus = 'active' | 'expired' | 'closed'
+
+export interface SessionRecord {
+  id: string
+  providerId: string
+  accountId: string
+  sessionType: 'chat' | 'agent'
+  messages: ChatMessage[]
+  createdAt: number
+  lastActiveAt: number
+  status: SessionStatus
+  model?: string
+  metadata?: {
+    title?: string
+    tokenCount?: number
+  }
+}
+
+export interface DailyStatistics {
+  date: string
+  totalRequests: number
+  successRequests: number
+  failedRequests: number
+  totalLatency: number
+  modelUsage: Record<string, number>
+  providerUsage: Record<string, number>
+}
+
+export interface PersistentStatistics {
+  totalRequests: number
+  successRequests: number
+  failedRequests: number
+  totalLatency: number
+  lastUpdated: number
+  modelUsage: Record<string, number>
+  providerUsage: Record<string, number>
+  accountUsage: Record<string, number>
+  dailyStats: Record<string, DailyStatistics>
 }

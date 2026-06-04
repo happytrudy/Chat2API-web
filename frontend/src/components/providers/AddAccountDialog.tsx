@@ -29,15 +29,62 @@ import {
   Copy,
   Check
 } from 'lucide-react'
-import type { Provider, CredentialField, Account, BuiltinProviderConfig } from '@/types/electron'
+import type { Provider, CredentialField, Account } from '@/types/electron'
+import type { BuiltinProviderConfig } from '@shared/types'
+import { useProvidersStore } from '@/stores/providersStore'
+
+function pickMiniMaxRealUserId(credentials: Record<string, string>): string | undefined {
+  const tryParseAgentJson = (raw: string): string | undefined => {
+    const trimmed = raw.trim()
+    if (!trimmed.startsWith('{')) return undefined
+    try {
+      const parsed = JSON.parse(trimmed) as { realUserID?: string }
+      return typeof parsed.realUserID === 'string' && parsed.realUserID.trim()
+        ? parsed.realUserID.trim()
+        : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  const agent = credentials.user_detail_agent
+  if (agent) {
+    const fromAgent = tryParseAgentJson(agent)
+    if (fromAgent) return fromAgent
+  }
+
+  for (const key of ['realUserID', '_userId', 'userId']) {
+    const value = credentials[key]
+    if (!value?.trim() || value.trim().startsWith('eyJ')) continue
+    const fromJson = tryParseAgentJson(value)
+    if (fromJson) return fromJson
+    return value.trim()
+  }
+
+  return undefined
+}
 
 /**
  * Map OAuth credentials to provider credential field names
  * OAuth returns credentials with keys like 'chatglm_refresh_token', but providers expect 'refresh_token'
  * DeepSeek stores token as JSON: {"value":"..."}
  */
+function normalizeCredentialsBeforeMap(
+  providerId: string | undefined,
+  credentials: Record<string, string>,
+): Record<string, string> {
+  const normalized = { ...credentials }
+  if (providerId === 'minimax') {
+    if (!normalized.token?.trim() && normalized.jwt?.trim()) {
+      normalized.token = normalized.jwt.trim()
+    }
+  }
+  return normalized
+}
+
 function mapOAuthCredentials(providerId: string | undefined, credentials: Record<string, string>): Record<string, string> {
   if (!providerId) return credentials
+  credentials = normalizeCredentialsBeforeMap(providerId, credentials)
 
   // For each provider, list every OAuth key that may carry the primary
   // token (raw cookie names, the bookmarklet's relabelled "token" field,
@@ -48,10 +95,10 @@ function mapOAuthCredentials(providerId: string | undefined, credentials: Record
     deepseek: ['userToken', 'token'],
     qwen: ['tongyi_sso_ticket', 'ticket', 'token'],
     'qwen-ai': ['tongyi_sso_ticket', 'ticket', 'token'],
-    zai: ['tongyi_sso_ticket', 'ticket', 'token'],
+    zai: ['token', 'accessToken', 'jwt'],
     perplexity: ['__Secure-next-auth.session-token', 'next-auth.session-token', 'sessionToken', 'token'],
     kimi: ['kimi-auth', 'token'],
-    minimax: ['_token', 'token'],
+    minimax: ['_token', 'jwt', 'token'],
     mimo: ['service_token', 'serviceToken', 'token'],
   }
 
@@ -60,7 +107,7 @@ function mapOAuthCredentials(providerId: string | undefined, credentials: Record
     deepseek: 'token',
     qwen: 'ticket',
     'qwen-ai': 'ticket',
-    zai: 'ticket',
+    zai: 'token',
     perplexity: 'sessionToken',
     kimi: 'token',
     minimax: 'token',
@@ -95,9 +142,8 @@ function mapOAuthCredentials(providerId: string | undefined, credentials: Record
     }
 
     if (tokenValue) {
-      // MiniMax also requires realUserID, kept alongside the primary token.
       if (providerId === 'minimax') {
-        const realUserID = credentials._userId || credentials.realUserID
+        const realUserID = pickMiniMaxRealUserId(credentials)
         const result: Record<string, string> = { [fieldName]: tokenValue }
         if (realUserID) result.realUserID = realUserID
         return result
@@ -176,8 +222,8 @@ export function AddAccountDialog({
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const isEditing = !!editingAccount
-  const builtinProvider = provider as BuiltinProviderConfig | null
-  const credentialFields: CredentialField[] = builtinProvider?.credentialFields || getDefaultCredentialFields(provider?.authType, t)
+  const builtinProviders = useProvidersStore((s) => s.builtinProviders)
+  const credentialFields: CredentialField[] = resolveCredentialFields(provider, builtinProviders, t)
   const supportsOAuth = provider && ['deepseek', 'glm', 'kimi', 'mimo', 'minimax', 'qwen', 'qwen-ai', 'zai', 'perplexity'].includes(provider.id)
 
   useEffect(() => {
@@ -227,7 +273,8 @@ export function AddAccountDialog({
     setValidationResult({})
 
     try {
-      const result = await onValidateToken(provider.id, credentials)
+      const mappedCredentials = mapOAuthCredentials(provider.id, credentials)
+      const result = await onValidateToken(provider.id, mappedCredentials)
       setValidationResult(result)
 
       if (result.valid && result.userInfo) {
@@ -268,12 +315,7 @@ export function AddAccountDialog({
     setIsSubmitting(true)
 
     try {
-      // For MiniMax, ensure realUserID is passed correctly
-      let finalCredentials = { ...credentials }
-      if (provider?.id === 'minimax' && credentials.realUserID && credentials.realUserID.trim()) {
-        // realUserID is provided separately, keep both fields
-        console.log('[AddAccountDialog] MiniMax realUserID provided:', credentials.realUserID)
-      }
+      const finalCredentials = mapOAuthCredentials(provider?.id, credentials)
 
       const data = {
         name: name.trim(),
@@ -364,9 +406,7 @@ export function AddAccountDialog({
                         // Map raw OAuth credentials to the provider's credential
                         // field names, then pre-fill the form so the user can
                         // review (and adjust the account name) before saving.
-                        console.log('[AddAccountDialog] OAuth raw creds:', JSON.stringify(creds))
                         const mapped = mapOAuthCredentials(provider.id, creds)
-                        console.log('[AddAccountDialog] Mapped creds:', JSON.stringify(mapped))
                         // Switch tab FIRST so the credential fields are mounted,
                         // then set credentials so React renders them filled.
                         setActiveTab('manual')
@@ -705,6 +745,24 @@ function CredentialFieldsForm({ fields, credentials, onChange, t, providerId }: 
   )
 }
 
+function resolveCredentialFields(
+  provider: Provider | null,
+  builtinProviders: BuiltinProviderConfig[],
+  t: (key: string) => string,
+): CredentialField[] {
+  if (!provider) return getDefaultCredentialFields('token', t)
+
+  const onProvider = 'credentialFields' in provider
+    ? (provider as { credentialFields?: CredentialField[] }).credentialFields
+    : undefined
+  if (onProvider?.length) return onProvider
+
+  const fromBuiltin = builtinProviders.find((p) => p.id === provider.id)?.credentialFields
+  if (fromBuiltin?.length) return fromBuiltin
+
+  return getDefaultCredentialFields(provider.authType, t)
+}
+
 function getDefaultCredentialFields(authType?: string, t?: (key: string) => string): CredentialField[] {
   const fieldConfigs: Record<string, CredentialField[]> = {
     token: [
@@ -745,11 +803,18 @@ function getDefaultCredentialFields(authType?: string, t?: (key: string) => stri
     ],
     jwt: [
       {
-        name: 'jwt',
+        name: 'token',
         label: 'JWT Token',
-        type: 'textarea',
+        type: 'password',
         required: true,
         placeholder: t ? t('providers.enterJwtToken') : 'Enter JWT Token (starts with eyJ)',
+      },
+      {
+        name: 'realUserID',
+        label: 'Real User ID',
+        type: 'text',
+        required: false,
+        placeholder: t ? t('minimax.realUserIDPlaceholder') : 'realUserID from user_detail_agent (optional)',
       },
     ],
   }

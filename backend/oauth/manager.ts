@@ -117,12 +117,14 @@ export class OAuthManager extends EventEmitter {
     token: string,
     realUserID?: string,
     mimoUserId?: string,
-    mimoPhToken?: string
+    mimoPhToken?: string,
+    captchaVerifyParam?: string,
+    cookies?: string
   ): Promise<OAuthResult> {
     const adapter = this.getAdapter(providerId, providerType)
     
     if ('loginWithToken' in adapter && typeof (adapter as any).loginWithToken === 'function') {
-      return await (adapter as any).loginWithToken(providerId, token, realUserID, mimoUserId, mimoPhToken)
+      return await (adapter as any).loginWithToken(providerId, token, realUserID, mimoUserId, mimoPhToken, captchaVerifyParam, cookies)
     }
     
     // For Mimo, validate with all three tokens

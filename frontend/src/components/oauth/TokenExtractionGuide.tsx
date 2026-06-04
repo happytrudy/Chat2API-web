@@ -53,6 +53,7 @@ interface ProviderGuide {
     label: string
     placeholder?: string
     storageHint?: string
+    required?: boolean
   }>
 }
 
@@ -116,16 +117,17 @@ const GUIDES: Record<string, ProviderGuide> = {
       'Click "Open login page" — MiniMax opens in a new tab.',
       'Sign in to your MiniMax account.',
       'Press F12 → Application → Local Storage → chat.minimaxi.com.',
-      'Copy the _token value.',
-      'Also copy the _userId value (next field below).',
+      'Copy the _token value (JWT, starts with eyJ).',
+      'Open user_detail_agent, copy the realUserID inside the JSON (numeric string).',
+      'Do NOT use UNIQUE_USER_ID as Real User ID.',
       'Paste both below and click Save.',
     ],
     extraFields: [
       {
         name: 'realUserID',
         label: 'Real User ID',
-        placeholder: 'Paste the _userId value',
-        storageHint: 'Same Local Storage panel, _userId field',
+        placeholder: 'realUserID from user_detail_agent JSON',
+        storageHint: 'Local Storage → user_detail_agent → realUserID (not UNIQUE_USER_ID)',
       },
     ],
   },
@@ -171,7 +173,7 @@ const GUIDES: Record<string, ProviderGuide> = {
       'Sign in to your Z.ai account.',
       'Press F12 → Application → Local Storage → chat.z.ai.',
       'Copy the token value.',
-      'Paste it below and click Save.',
+      'Paste the token below and click Save.',
     ],
   },
   perplexity: {
@@ -279,7 +281,7 @@ export function TokenExtractionGuide({
       return
     }
     for (const f of guide.extraFields ?? []) {
-      if (!(extras[f.name] ?? '').trim()) {
+      if (f.required !== false && !(extras[f.name] ?? '').trim()) {
         setError(`Please paste the ${f.label} value.`)
         return
       }

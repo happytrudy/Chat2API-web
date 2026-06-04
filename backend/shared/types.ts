@@ -40,6 +40,12 @@ export type {
   ToolCallingConfig,
 }
 
+export type {
+  DailyStatistics,
+  PersistentStatistics,
+  SessionRecord,
+} from '../store/types'
+
 export interface Account {
   id: string
   providerId: string

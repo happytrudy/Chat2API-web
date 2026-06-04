@@ -18,6 +18,7 @@ import {
   transformResponseToAnthropic,
   transformChunkToAnthropic
 } from '../utils/toolFormatConverter'
+import { extractUserInputFromMessages, normalizeChatRoles } from '../utils/messageContent'
 
 const router = new Router({ prefix: '/v1/chat' })
 
@@ -38,28 +39,8 @@ function getClientIP(ctx: Context): string {
     'unknown'
 }
 
-/**
- * Extract user input from messages (last user message, full content)
- */
 function extractUserInput(messages: Array<{ role: string; content?: string | any[] | null }>): string | undefined {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i]
-    if (msg.role === 'user' && msg.content) {
-      let content = ''
-      if (typeof msg.content === 'string') {
-        content = msg.content
-      } else if (Array.isArray(msg.content)) {
-        const textParts = msg.content.filter((p: any) => p.type === 'text')
-        if (textParts.length > 0) {
-          content = textParts.map((p: any) => p.text || '').join(' ')
-        }
-      }
-      if (content) {
-        return content
-      }
-    }
-  }
-  return undefined
+  return extractUserInputFromMessages(messages)
 }
 
 /**
@@ -111,6 +92,8 @@ router.post('/completions', async (ctx: Context) => {
     }
     return
   }
+
+  request.messages = normalizeChatRoles(request.messages) as typeof request.messages
 
   // Read feature parameters from Headers (lower priority than request body)
   const webSearchFromHeader = ctx.headers['x-web-search'] === 'true'
@@ -277,6 +260,9 @@ router.post('/completions', async (ctx: Context) => {
       ? JSON.stringify(result.body)
       : undefined
 
+    // Serialize request body once for both stream and non-stream
+    const requestBodyForLog = JSON.stringify(request)
+
     // For streaming requests, we'll collect content and update the log later
     let logEntryId: string | undefined
 
@@ -294,7 +280,7 @@ router.post('/completions', async (ctx: Context) => {
         providerName: provider.name,
         accountId: account.id,
         accountName: account.name,
-        requestBody: JSON.stringify(request),
+        requestBody: requestBodyForLog,
         userInput,
         webSearch: request.web_search,
         reasoningEffort: request.reasoning_effort,
@@ -305,7 +291,7 @@ router.post('/completions', async (ctx: Context) => {
       })
       logEntryId = logEntry.id
     } else {
-      // Streaming: record log now, will update response body later
+      // Streaming: record log now with requestBody and userInput, will update response body later
       const logEntry = storeManager.addRequestLog({
         timestamp: startTime,
         status: 'success',
@@ -318,7 +304,7 @@ router.post('/completions', async (ctx: Context) => {
         providerName: provider.name,
         accountId: account.id,
         accountName: account.name,
-        requestBody: JSON.stringify(request),
+        requestBody: requestBodyForLog,
         userInput,
         webSearch: request.web_search,
         reasoningEffort: request.reasoning_effort,

@@ -11,6 +11,7 @@ import crypto from 'crypto'
 import { createParser, EventSourceMessage } from 'eventsource-parser'
 import FormData from 'form-data'
 import { Account, Provider } from '../../store/types'
+import { resolveMiniMaxCredentials } from '../../shared/minimaxCredentials'
 import { toolsToSystemPrompt, TOOL_WRAP_HINT, hasToolPromptInjected, shouldInjectToolPrompt } from '../utils/tools'
 import { parseToolCallsFromText } from '../utils/toolParser'
 import { 
@@ -136,34 +137,17 @@ function tokenSplit(authorization: string): string[] {
   return [token]
 }
 
-/**
- * Parse JWT token to extract user ID
- * MiniMax JWT payload contains: { user: { id: string, name: string, ... } }
- */
-function parseJWTUserID(jwtToken: string): string {
+function extractJWTDeviceID(jwtToken: string): string {
   try {
-    // JWT format: header.payload.signature
     const parts = jwtToken.split('.')
-    if (parts.length !== 3) {
-      console.log('[MiniMax] Invalid JWT format, expected 3 parts, got:', parts.length)
-      return ''
-    }
-    
-    // Base64 decode the payload
+    if (parts.length !== 3) return ''
     const payload = parts[1]
-    // Add padding if needed
     const padding = 4 - (payload.length % 4)
     const paddedPayload = padding !== 4 ? payload + '='.repeat(padding) : payload
-    
     const decoded = Buffer.from(paddedPayload, 'base64').toString('utf8')
     const payloadObj = JSON.parse(decoded)
-    
-    // MiniMax JWT contains user.id
-    const userID = payloadObj?.user?.id || ''
-    console.log('[MiniMax] Parsed userID from JWT:', userID)
-    return userID
-  } catch (error) {
-    console.error('[MiniMax] Failed to parse JWT:', error)
+    return payloadObj?.user?.deviceID || ''
+  } catch {
     return ''
   }
 }
@@ -183,44 +167,24 @@ export class MiniMaxAdapter {
   private rawToken: string
   private jwtToken: string
   private realUserID: string
+  private jwtDeviceId: string
   private model: string
   private created: number
 
   constructor(provider: Provider, account: Account) {
     this.provider = provider
     this.account = account
-    this.rawToken = account.credentials.token || ''
-    this.model = 'MiniMax-M2.7'
-    this.created = unixTimestamp()
-
-    // Check if realUserID is provided separately in credentials
-    const providedRealUserID = account.credentials.realUserID as string | undefined
-    
-    if (providedRealUserID && providedRealUserID.trim()) {
-      // User provided realUserID separately, use it directly
-      this.realUserID = providedRealUserID.trim()
-      this.jwtToken = this.rawToken
-      console.log('[MiniMax] Using provided realUserID:', this.realUserID)
-    } else {
-      // No separate realUserID, check if token is in realUserID+JWTtoken format
-      const tokens = tokenSplit(this.rawToken)
-      const fullToken = tokens[0]
-
-      // Check if token is in realUserID+JWTtoken format
-      if (fullToken.includes('+')) {
-        const parts = fullToken.split('+')
-        this.realUserID = parts[0]
-        this.jwtToken = parts[1]
-        console.log('[MiniMax] Token contains realUserID+JWT format, realUserID:', this.realUserID)
-      } else {
-        // Just JWT token, parse userID from it
-        this.jwtToken = fullToken
-        this.realUserID = parseJWTUserID(this.jwtToken)
-        console.log('[MiniMax] Parsed realUserID from JWT:', this.realUserID)
-      }
+    const resolved = resolveMiniMaxCredentials(account.credentials)
+    if (resolved.error) {
+      throw new Error(resolved.error)
     }
 
-    console.log('[MiniMax] Token parsed - realUserID:', this.realUserID ? '(set)' : '(empty)')
+    this.rawToken = `${resolved.realUserID}+${resolved.jwtToken}`
+    this.jwtToken = resolved.jwtToken
+    this.realUserID = resolved.realUserID
+    this.jwtDeviceId = extractJWTDeviceID(resolved.jwtToken)
+    this.model = 'MiniMax-M2.7'
+    this.created = unixTimestamp()
   }
 
   private async requestDeviceInfo(): Promise<DeviceInfo> {
@@ -231,67 +195,19 @@ export class MiniMaxAdapter {
       return result
     }
 
-    const randomUuid = uuid()
-    const unix = `${Date.now()}`
-    const timestamp = unixTimestamp()
-    
-    const userData = { ...FAKE_USER_DATA }
-    userData.uuid = randomUuid
-    userData.user_id = this.realUserID
-    userData.unix = unix
-    userData.token = this.jwtToken
-    
-    let queryStr = ''
-    for (const key in userData) {
-      if (userData[key] === undefined) continue
-      queryStr += `&${key}=${userData[key]}`
-    }
-    queryStr = queryStr.substring(1)
-    
-    const dataJson = JSON.stringify({ uuid: randomUuid })
-    const fullUri = `/v1/api/user/device/register?${queryStr}`
-    const yy = md5(`${encodeURIComponent(fullUri)}_${dataJson}${md5(unix)}ooui`)
-    const signature = md5(`${timestamp}${this.jwtToken}${dataJson}`)
-
-    console.log('[MiniMax] Registering device - randomUuid:', randomUuid, 'realUserID:', this.realUserID)
-
-    const response = await axios.post(
-      `${AGENT_BASE_URL}${fullUri}`,
-      { uuid: randomUuid },
-      {
-        headers: {
-          ...FAKE_HEADERS,
-          'Content-Type': 'application/json',
-          'Referer': `${AGENT_BASE_URL}/`,
-          'token': this.jwtToken,
-          'x-timestamp': String(timestamp),
-          'x-signature': signature,
-          'yy': yy,
-        },
-        timeout: 15000,
-        validateStatus: () => true,
-      }
-    )
-
-    console.log('[MiniMax] Device register response:', response.status, JSON.stringify(response.data))
-
-    if (response.status !== 200 || response.data?.statusInfo?.code !== 0) {
-      throw new Error(`Failed to register device: ${response.data?.statusInfo?.message || response.status}`)
-    }
-
-    const data = checkResult(response)
-
+    // Agent send_msg follows upstream MiniMax-Free-API chat-agent.ts:
+    // use realUserID + JWT directly and do not rely on device/register for chat auth.
+    const deviceId = this.jwtDeviceId || String(Math.floor(Math.random() * 1000000000))
     result = {
-      deviceId: data?.deviceIDStr || '',
+      deviceId,
       userId: this.realUserID,
-      realUserID: data?.realUserID || this.realUserID,
+      realUserID: this.realUserID,
       jwtToken: this.jwtToken,
       refreshTime: unixTimestamp() + DEVICE_INFO_EXPIRES,
-      uuid: randomUuid,
+      uuid: this.realUserID,
     }
 
     deviceInfoMap.set(cacheKey, result)
-    console.log('[MiniMax] Device info cached:', { deviceId: result.deviceId, userId: result.userId, realUserID: result.realUserID, uuid: result.uuid })
     return result
   }
 
@@ -323,8 +239,6 @@ export class MiniMaxAdapter {
     const fullUri = `${uri}${uri.lastIndexOf('?') != -1 ? '&' : '?'}${queryStr}`
     const yy = md5(`${encodeURIComponent(fullUri)}_${dataJson}${md5(unix)}ooui`)
     const signature = md5(`${timestamp}${this.jwtToken}${dataJson}`)
-
-    console.log('[MiniMax] Request - uuid:', realUserID, 'user_id:', realUserID, 'device_id:', deviceInfo.deviceId)
 
     return await axios.request({
       method,
@@ -373,11 +287,6 @@ export class MiniMaxAdapter {
     const yy = md5(`${encodeURIComponent(`${uri}?${queryStr}`)}_${dataJson}${md5(unix)}ooui`)
     const signature = md5(`${timestamp}${this.jwtToken}${dataJson}`)
 
-    console.log('[MiniMax] Stream Request - uuid:', realUserID, 'user_id:', realUserID, 'device_id:', deviceInfo.deviceId)
-    console.log('[MiniMax] Request body:', dataJson)
-    console.log('[MiniMax] Query string:', queryStr)
-    console.log('[MiniMax] Headers - timestamp:', timestamp, 'signature:', signature.substring(0, 16) + '...', 'yy:', yy.substring(0, 16) + '...')
-
     const session = await new Promise<ClientHttp2Session>((resolve, reject) => {
       const session = http2.connect(AGENT_BASE_URL)
       session.on('connect', () => resolve(session))
@@ -404,23 +313,6 @@ export class MiniMaxAdapter {
     const stream = session.request(headers)
     stream.setTimeout(120000)
     stream.setEncoding('utf8')
-
-    stream.on('response', (respHeaders) => {
-      console.log('[MiniMax] HTTP/2 response headers:', JSON.stringify(respHeaders))
-    })
-
-    stream.on('data', (chunk) => {
-      console.log('[MiniMax] HTTP/2 data chunk:', chunk.toString().substring(0, 200))
-    })
-
-    stream.on('error', (err) => {
-      console.error('[MiniMax] HTTP/2 stream error:', err)
-    })
-
-    stream.on('close', () => {
-      console.log('[MiniMax] HTTP/2 stream closed')
-    })
-
     stream.end(Buffer.from(dataJson, 'utf8'))
 
     return { session, stream }
@@ -547,8 +439,6 @@ export class MiniMaxAdapter {
   }
 
   async chatCompletion(request: ChatCompletionRequest): Promise<{ response: AxiosResponse | null; stream: { session: ClientHttp2Session; stream: ClientHttp2Stream } | null; chatId: string }> {
-    console.log('[MiniMax] chatCompletion called with model:', request.model, 'stream:', request.stream)
-    
     this.model = request.model || 'MiniMax-M2.7'
     this.created = unixTimestamp()
     
@@ -579,7 +469,6 @@ export class MiniMaxAdapter {
     let chatId: string = request.chatId || ''
     
     if (chatId) {
-      console.log('[MiniMax] Using existing chat:', chatId)
       const sendResponse = await this.request('POST', '/matrix/api/v1/chat/send_msg', {
         ...requestBody,
         chat_id: chatId,
@@ -597,10 +486,7 @@ export class MiniMaxAdapter {
     } else {
       const sendResponse = await this.request('POST', '/matrix/api/v1/chat/send_msg', requestBody, deviceInfo)
       
-      console.log('[MiniMax] Send response status:', sendResponse.status)
-      
       if (sendResponse.status !== 200) {
-        console.error('[MiniMax] Error response:', JSON.stringify(sendResponse.data))
         throw new Error(`MiniMax API error: HTTP ${sendResponse.status} - ${JSON.stringify(sendResponse.data)}`)
       }
       
@@ -613,7 +499,6 @@ export class MiniMaxAdapter {
       
       chatId = result.chat_id
       msgId = result.msg_id
-      console.log('[MiniMax] Message sent, chat_id:', chatId, 'msg_id:', msgId)
     }
     
     if (request.stream === true) {
@@ -689,14 +574,12 @@ export class MiniMaxAdapter {
       const detailResponse = await this.request('POST', '/matrix/api/v1/chat/get_chat_detail', { chat_id: chatId }, deviceInfo)
       
       if (detailResponse.status !== 200) {
-        console.log('[MiniMax] Poll failed, status:', detailResponse.status)
         continue
       }
       
       const { messages, base_resp } = detailResponse.data
       
       if (base_resp?.status_code !== 0) {
-        console.log('[MiniMax] Poll failed, status_code:', base_resp?.status_code)
         continue
       }
       
@@ -704,7 +587,6 @@ export class MiniMaxAdapter {
       const aiMessage = messages?.find((msg: any) => msg.msg_type === 2)
       
       if (aiMessage && aiMessage.msg_content) {
-        console.log('[MiniMax] AI response received after', pollCount, 'polls')
         return aiMessage
       }
     }
@@ -734,34 +616,18 @@ export class MiniMaxAdapter {
           const detailResponse = await this.request('POST', '/matrix/api/v1/chat/get_chat_detail', { chat_id: chatId }, deviceInfo)
           
           if (detailResponse.status !== 200) {
-            console.log('[MiniMax] Poll status:', detailResponse.status)
             continue
           }
           
           const { messages, chat, base_resp } = detailResponse.data
           if (base_resp?.status_code !== 0) {
-            console.log('[MiniMax] Poll base_resp:', base_resp)
             continue
           }
           
           const chatStatus = chat?.chat_status || 0
           
-          console.log('[MiniMax] Poll #' + pollCount + ' - chat_status:', chatStatus, 'messages count:', messages?.length)
-          
-          if (messages && messages.length > 0) {
-            console.log('[MiniMax] Message details:', messages.map((m: any) => ({ 
-              msg_id: m.msg_id, 
-              msg_type: m.msg_type, 
-              content_len: m.msg_content?.length || 0,
-              has_thinking: !!m.extra_info?.thinking_content,
-              thinking_len: m.extra_info?.thinking_content?.length || 0
-            })))
-          }
-          
           const aiMessages = messages?.filter((msg: any) => msg.msg_type === 2)
           const aiMessage = aiMessages?.length > 0 ? aiMessages[aiMessages.length - 1] : null
-          
-          console.log('[MiniMax] AI messages count:', aiMessages?.length, 'using last message')
           
           if (aiMessage && aiMessage.msg_content) {
             const currentContent = aiMessage.msg_content
@@ -769,16 +635,9 @@ export class MiniMaxAdapter {
             const currentMsgId = aiMessage.msg_id || ''
             
             if (currentMsgId !== lastMsgId && lastMsgId !== '') {
-              console.log('[MiniMax] New AI message detected, msg_id changed from', lastMsgId, 'to', currentMsgId)
               lastContent = ''
               lastThinkingContent = ''
             }
-            
-            console.log('[MiniMax] AI message found - msg_id:', currentMsgId, 
-              'content_len:', currentContent.length, 
-              'thinking_len:', currentThinkingContent.length,
-              'last_content_len:', lastContent.length,
-              'last_thinking_len:', lastThinkingContent.length)
             
             if (currentThinkingContent && currentThinkingContent.length > lastThinkingContent.length) {
               const newThinkingChunk = currentThinkingContent.substring(lastThinkingContent.length)
@@ -831,8 +690,6 @@ export class MiniMaxAdapter {
             lastMsgId = currentMsgId
             
             if (chatStatus === 2 && aiMessage.msg_content) {
-              console.log('[MiniMax] Stream completed - chat_status: 2, polls:', pollCount, 'content length:', lastContent.length, 'thinking length:', lastThinkingContent.length)
-              
               const baseChunk = createBaseChunk(chatId.toString(), model, created)
               const flushChunks = flushToolCallBuffer(toolCallState, baseChunk, 'minimax')
               
@@ -862,7 +719,6 @@ export class MiniMaxAdapter {
           }
         }
         
-        console.log('[MiniMax] Stream timeout after', maxPolls, 'polls')
         transStream.end('data: [DONE]\n\n')
       } catch (err) {
         console.error('[MiniMax] Polling error:', err)
@@ -883,8 +739,6 @@ export class MiniMaxAdapter {
       try {
         const deviceInfo = await this.requestDeviceInfo()
         const response = await this.request('POST', '/matrix/api/v1/chat/delete_chat', { chat_id: parseInt(chatId, 10) }, deviceInfo)
-        console.log('[MiniMax] Chat deleted attempt', attempt, ':', chatId, 'Status:', response.status, 'Response:', JSON.stringify(response.data))
-        
         if (response.status === 200 && response.data?.base_resp?.status_code === 0) {
           return true
         }
@@ -927,8 +781,6 @@ export class MiniMaxAdapter {
       
       const response = await this.request('POST', '/matrix/api/v1/commerce/get_membership_info', {}, deviceInfo)
       
-      console.log('[MiniMax] get_membership_info status:', response.status)
-      
       if (response.status === 200 && response.data?.base_resp?.status_code === 0) {
         const data = response.data
         const remainingCredits = data?.daily_login_gift_credit_remaining || 0
@@ -940,11 +792,6 @@ export class MiniMaxAdapter {
           // expires_at is in milliseconds, use it directly
           expiresAt = creditsData.expires_at
         }
-        
-        if (expiresAt) {
-          console.log('[MiniMax] Credit expires at:', new Date(expiresAt).toISOString())
-        }
-        console.log('[MiniMax] Credits:', { remainingCredits, expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined })
         
         return {
           totalCredits: 0, // Not available
@@ -982,15 +829,12 @@ export class MiniMaxAdapter {
         
         const response = await this.request('POST', '/matrix/api/v1/chat/list_chat', requestBody, deviceInfo)
         
-        console.log('[MiniMax] list_chat response status:', response.status)
-        
         if (response.status !== 200 || response.data?.base_resp?.status_code !== 0) {
           console.error('[MiniMax] Failed to get chat list:', response.data?.base_resp?.status_msg)
           break
         }
         
         const chatList = response.data?.chats || response.data?.chat_list || []
-        console.log('[MiniMax] Received chats count:', chatList.length)
         if (chatList.length === 0) {
           break
         }
@@ -1004,7 +848,6 @@ export class MiniMaxAdapter {
         nextPageIndexId = chatList[chatList.length - 1]?.chat_id
       }
       
-      console.log('[MiniMax] Got chat list, total:', allChats.length)
       return allChats
     } catch (error) {
       console.error('[MiniMax] Failed to get chat list:', error)
@@ -1014,15 +857,10 @@ export class MiniMaxAdapter {
 
   async deleteAllChats(): Promise<boolean> {
     try {
-      console.log('[MiniMax] Starting to delete all chats...')
-      
       const chatList = await this.getChatList()
       if (chatList.length === 0) {
-        console.log('[MiniMax] No chats to delete')
         return true
       }
-      
-      console.log('[MiniMax] Found', chatList.length, 'chats to delete')
       
       let successCount = 0
       let failCount = 0
@@ -1085,8 +923,6 @@ export class MiniMaxStreamHandler {
     let httpStatus: number | null = null
     let buffer = ''
 
-    console.log('[MiniMax] Starting stream handler...')
-
     // Listen for HTTP/2 response headers to check status code
     stream.once('response', (headers: http2.IncomingHttpHeaders) => {
       const statusValue = headers[':status']
@@ -1096,8 +932,6 @@ export class MiniMaxStreamHandler {
       } else if (typeof statusValue === 'number') {
         httpStatus = statusValue
       }
-
-      console.log('[MiniMax] HTTP/2 response status:', httpStatus)
 
       // If status is not 200, emit error and close stream
       if (httpStatus >= 400) {
@@ -1118,8 +952,6 @@ export class MiniMaxStreamHandler {
           hasReceivedData = true
           const eventName = event.event
           if (event.data === '[DONE]') return
-
-          console.log('[MiniMax] SSE event:', eventName, 'data:', event.data?.substring(0, 100))
 
           const result = JSON.parse(event.data)
           const { type, base_resp, statusInfo, data: _data } = result
@@ -1172,8 +1004,6 @@ export class MiniMaxStreamHandler {
             )
             content += chunk
 
-            console.log('[MiniMax] Stream chunk:', chunk.substring(0, 50), 'isEnd:', isEnd)
-
             // Process tool call interception
             const baseChunk = createBaseChunk(this.chatId, this.model, this.created)
             const { chunks: outputChunks } = processStreamContent(
@@ -1223,7 +1053,6 @@ export class MiniMaxStreamHandler {
     stream.on('data', (chunk: Buffer) => {
       hasReceivedData = true
       const chunkStr = chunk.toString()
-      console.log('[MiniMax] Raw chunk:', chunkStr.substring(0, 200))
 
       // Try to parse as SSE first
       if (chunkStr.includes('event:') || chunkStr.includes('data:')) {
@@ -1238,14 +1067,12 @@ export class MiniMaxStreamHandler {
           if (!line.trim()) continue
           try {
             const result = JSON.parse(line)
-            console.log('[MiniMax] Parsed JSON:', result)
 
             const { type, base_resp, statusInfo, data: _data, chat_id, msg_id } = result
 
             // Handle initial response with chat_id
             if (chat_id && !this.chatId) {
               this.chatId = chat_id
-              console.log('[MiniMax] Set chatId:', this.chatId)
               continue
             }
 
@@ -1292,8 +1119,6 @@ export class MiniMaxStreamHandler {
               )
               content += chunk
 
-              console.log('[MiniMax] Stream chunk:', chunk.substring(0, 50), 'isEnd:', isEnd)
-
               transStream.write(
                 `data: ${JSON.stringify({
                   id: this.chatId || `minimax-${Date.now()}`,
@@ -1324,12 +1149,10 @@ export class MiniMaxStreamHandler {
     })
 
     stream.once('close', () => {
-      console.log('[MiniMax] Stream closed, hasReceivedData:', hasReceivedData, 'httpStatus:', httpStatus)
       // Process any remaining data in buffer
       if (buffer.trim()) {
         try {
-          const result = JSON.parse(buffer.trim())
-          console.log('[MiniMax] Processing remaining buffer:', result)
+          JSON.parse(buffer.trim())
         } catch (e) {
           parser.feed(buffer)
         }

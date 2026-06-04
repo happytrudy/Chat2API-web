@@ -11,6 +11,7 @@ import { getDeepSeekHash } from '../../lib/challenge'
 import type { Account, Provider } from '../../store/types'
 import { resolveDeepSeekChatOptions } from './providerModelOptions'
 import { getProviderToolProfile } from '../toolCalling/providerProfiles'
+import { extractMessageText } from '../utils/messageContent'
 
 const DEEPSEEK_API_BASE = 'https://chat.deepseek.com/api'
 
@@ -306,13 +307,8 @@ export class DeepSeekAdapter {
           content: String(message.content || ''),
         })
       }
-      else if (Array.isArray(message.content)) {
-        const texts = message.content
-          .filter((item: any) => item.type === 'text')
-          .map((item: any) => item.text)
-        text = texts.join('\n')
-      } else {
-        text = String(message.content || '')
+      else {
+        text = extractMessageText(message)
       }
       return { role: message.role, text }
     })
@@ -387,7 +383,19 @@ export class DeepSeekAdapter {
 
     let prompt = this.messagesToPrompt(messages, false)
 
+    console.log('[DeepSeek] Prompt length:', prompt.length, 'message count:', messages.length)
+    if (!prompt.trim()) {
+      console.error('[DeepSeek] Empty prompt — message summary:', JSON.stringify(
+        messages.map((m) => ({ role: m.role, len: extractMessageText(m).length }))
+      ))
+      throw new Error(
+        'DeepSeek prompt is empty: no extractable user message content. ' +
+        'Ensure messages use role "user" with string or text/input_text content parts.'
+      )
+    }
+
     const { modelType, searchEnabled, thinkingEnabled } = resolveDeepSeekChatOptions(request, prompt)
+    console.log('[DeepSeek] Request options:', { modelType, searchEnabled, thinkingEnabled })
 
     if (request.web_search || request.model.toLowerCase().includes('search')) {
       console.log('[DeepSeek] Web search enabled')

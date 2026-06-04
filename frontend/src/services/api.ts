@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
+import axios, { AxiosInstance, AxiosResponse } from 'axios'
 import type { 
   AppConfig, 
   Provider, 
@@ -7,6 +7,7 @@ import type {
   OAuthResult,
   LogEntry,
   RequestLogEntry,
+  ProxyStatus,
   PersistentStatistics,
   DailyStatistics,
   SystemPrompt,
@@ -91,10 +92,10 @@ export const ApiService = {
 
   // Proxy Service
   proxy: {
-    start: (port?: number, host?: string) => apiClient.post('/proxy/start', { port, host }),
-    stop: () => apiClient.post('/proxy/stop'),
-    restart: (port?: number, host?: string) => apiClient.post('/proxy/restart', { port, host }),
-    getStatus: () => apiClient.get('/proxy/status'),
+    start: (port?: number, host?: string): Promise<boolean> => apiClient.post('/proxy/start', { port, host }),
+    stop: (): Promise<boolean> => apiClient.post('/proxy/stop'),
+    restart: (port?: number, host?: string): Promise<boolean> => apiClient.post('/proxy/restart', { port, host }),
+    getStatus: (): Promise<ProxyStatus> => apiClient.get('/proxy/status'),
   },
 
   // App Configuration
@@ -206,9 +207,9 @@ export const ApiService = {
   // App Logs
   logs: {
     get: (filter?: any): Promise<LogEntry[]> => apiClient.get('/logs/app', { params: filter }),
-    getStats: () => apiClient.get('/logs/app/stats'),
-    getTrend: (days?: number) => apiClient.get('/logs/app/trend', { params: { days } }),
-    getAccountTrend: (accountId: string, days?: number) => apiClient.get(`/logs/app/trend/${accountId}`, { params: { days } }),
+    getStats: (): Promise<{ total: number; info: number; warn: number; error: number; debug: number }> => apiClient.get('/logs/app/stats'),
+    getTrend: (days?: number): Promise<Array<{ date: string; total: number; info: number; warn: number; error: number }>> => apiClient.get('/logs/app/trend', { params: { days } }),
+    getAccountTrend: (accountId: string, days?: number): Promise<Array<{ date: string; total: number; info: number; warn: number; error: number }>> => apiClient.get(`/logs/app/trend/${accountId}`, { params: { days } }),
     clear: (): Promise<void> => apiClient.post('/logs/app/clear'),
     export: (format?: string): Promise<string> => apiClient.get('/logs/app/export', { params: { format } }),
     getById: (id: string): Promise<LogEntry> => apiClient.get(`/logs/app/${id}`),

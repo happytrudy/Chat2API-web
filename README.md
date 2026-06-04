@@ -207,7 +207,6 @@ Works with Cherry Studio, Chatbox, OpenCat, Cline, Roo-Code, or any OpenAI-compa
 - **Model Updates** — All providers synced to latest upstream models (DeepSeek V4, GLM-5.1, Qwen3.6/3.7, MiniMax-M2.7, etc.)
 - **Session Management** — Qwen and Kimi now support batch session listing and deletion
 - **DeepSeek Search Enhancement** — Improved search result merging, citation handling, and semantic model detection
-- **Z.ai Captcha Support** — New `captcha_verify_param` credential field for verification bypass
 - **Thinking Mode Improvements** — Better thinking/search/fold mode detection across all providers
 - **Updated Browser Fingerprints** — Chrome 148 UA and headers for DeepSeek, Z.ai
 
