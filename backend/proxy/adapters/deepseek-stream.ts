@@ -168,6 +168,40 @@ export class DeepSeekStreamHandler {
     }
   }
 
+  private extractUpstreamErrorMessage(raw: string): string | null {
+    const text = raw.trim()
+    if (!text) return null
+
+    try {
+      const parsed = JSON.parse(text)
+      const data = parsed?.data ?? parsed
+      const bizData = data?.biz_data ?? parsed?.biz_data
+      const message = data?.biz_msg || parsed?.biz_msg || data?.msg || parsed?.msg
+      const code = data?.biz_code ?? parsed?.biz_code ?? data?.code ?? parsed?.code
+      const muteUntil = bizData?.mute_until ?? data?.mute_until ?? parsed?.mute_until
+
+      if (!message && code === undefined) return null
+
+      if (message === 'user is muted' && typeof muteUntil === 'number') {
+        const until = new Date(muteUntil * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+        return `DeepSeek account is muted until ${until} (Asia/Shanghai).`
+      }
+
+      return code !== undefined ? `DeepSeek upstream error ${code}: ${message || 'Unknown error'}` : String(message)
+    } catch {
+      return null
+    }
+  }
+
+  private emitUpstreamError(transStream: PassThrough, message: string): void {
+    if (!this.messageId) {
+      this.messageId = `msg_${Date.now()}`
+    }
+    transStream.write(this.createChunk({ role: 'assistant', content: `Error: ${message}` }))
+    this.isFirstChunk = false
+    this.contentEmitted = true
+  }
+
   private createChunk(delta: { role?: string; content?: string; reasoning_content?: string; tool_calls?: any[] }, finishReason?: string): string {
     // Ensure messageId exists before creating chunk
     const messageId = this.messageId || `msg_${Date.now()}`
@@ -255,6 +289,11 @@ export class DeepSeekStreamHandler {
       }
       if (!this.contentEmitted && this.sseEventCount === 0) {
         console.warn('[DeepSeek Stream] No SSE events parsed — upstream may have returned an empty or non-SSE body')
+        const upstreamError = this.extractUpstreamErrorMessage(buffer)
+        if (upstreamError) {
+          console.warn('[DeepSeek Stream] Parsed upstream error:', upstreamError)
+          this.emitUpstreamError(transStream, upstreamError)
+        }
       }
       this.handleDone(transStream, isFoldModel, isSearchSilentModel)
     })
