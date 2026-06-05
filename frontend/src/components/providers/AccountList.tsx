@@ -41,6 +41,147 @@ import {
 import type { Account, AccountStatus } from '@/types/electron'
 import { cn } from '@/lib/utils'
 
+const EMAIL_CREDENTIAL_KEYS = [
+  'email',
+  'mail',
+  'user_email',
+  'login_email',
+]
+
+const IDENTIFIER_CREDENTIAL_KEYS = [
+  'user_id',
+  'userId',
+  'realUserID',
+  'uid',
+  'sub',
+  'id',
+  'phone',
+  'mobile',
+]
+
+const TOKEN_CREDENTIAL_KEYS = [
+  'token',
+  'accessToken',
+  'jwt',
+  'userToken',
+  'refresh_token',
+  'service_token',
+  'sessionToken',
+]
+
+function decodeBase64UrlJson(value: string): Record<string, unknown> | null {
+  try {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+    const decoded = atob(padded)
+    return JSON.parse(decoded)
+  } catch {
+    return null
+  }
+}
+
+function parseJsonObject(value: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function extractIdentifierFromObject(obj: Record<string, unknown>): string | null {
+  for (const key of EMAIL_CREDENTIAL_KEYS) {
+    const value = obj[key]
+    if (typeof value === 'string' && value.includes('@') && value.trim()) {
+      return maskEmail(value)
+    }
+  }
+
+  for (const key of IDENTIFIER_CREDENTIAL_KEYS) {
+    const value = obj[key]
+    if (typeof value === 'string' && value.trim()) {
+      return `${key}: ${maskIdentifier(value)}`
+    }
+  }
+
+  return null
+}
+
+function extractIdentifierFromToken(value: string): string | null {
+  const trimmed = value.trim()
+  const jsonObject = parseJsonObject(trimmed)
+  if (jsonObject) {
+    const directIdentifier = extractIdentifierFromObject(jsonObject)
+    if (directIdentifier) return directIdentifier
+
+    for (const nestedValue of Object.values(jsonObject)) {
+      if (typeof nestedValue !== 'string') continue
+      const nestedIdentifier = extractIdentifierFromToken(nestedValue)
+      if (nestedIdentifier) return nestedIdentifier
+    }
+  }
+
+  const parts = trimmed.split('.')
+  if (parts.length >= 2) {
+    const payload = decodeBase64UrlJson(parts[1])
+    if (payload) {
+      return extractIdentifierFromObject(payload)
+    }
+  }
+
+  return null
+}
+
+function maskEmail(email: string): string {
+  const trimmed = email.trim()
+  const atIndex = trimmed.indexOf('@')
+  if (atIndex <= 1) return trimmed
+
+  const local = trimmed.slice(0, atIndex)
+  const domain = trimmed.slice(atIndex)
+  if (local.length <= 2) {
+    return `${local[0]}*${domain}`
+  }
+
+  return `${local.slice(0, 2)}${'*'.repeat(Math.max(3, local.length - 2))}${domain}`
+}
+
+function maskIdentifier(value: string): string {
+  const trimmed = value.trim()
+  if (trimmed.length <= 6) return trimmed
+  return `${trimmed.slice(0, 3)}${'*'.repeat(Math.max(3, trimmed.length - 5))}${trimmed.slice(-2)}`
+}
+
+function getAccountSecondaryIdentifier(account: Account): string | null {
+  if (account.email?.trim()) {
+    return maskEmail(account.email)
+  }
+
+  for (const key of EMAIL_CREDENTIAL_KEYS) {
+    const value = account.credentials?.[key]
+    if (typeof value === 'string' && value.includes('@') && value.trim()) {
+      return maskEmail(value)
+    }
+  }
+
+  for (const key of IDENTIFIER_CREDENTIAL_KEYS) {
+    const value = account.credentials?.[key]
+    if (typeof value === 'string' && value.trim()) {
+      return `${key}: ${maskIdentifier(value)}`
+    }
+  }
+
+  for (const key of TOKEN_CREDENTIAL_KEYS) {
+    const value = account.credentials?.[key]
+    if (typeof value !== 'string' || !value.trim()) continue
+
+    const identifier = extractIdentifierFromToken(value)
+    if (identifier) return identifier
+  }
+
+  return `ID: ${account.id.slice(0, 8)}`
+}
+
 interface AccountListProps {
   accounts: Account[]
   providerId: string
@@ -195,6 +336,7 @@ export function AccountList({
             const config = statusConfig[account.status]
             const StatusIcon = config.icon
             const isValidating = validatingIds.has(account.id)
+            const secondaryIdentifier = getAccountSecondaryIdentifier(account)
 
             return (
               <Card 
@@ -225,8 +367,8 @@ export function AccountList({
                         </div>
                         
                         <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                          {account.email && (
-                            <span className="truncate">{account.email}</span>
+                          {secondaryIdentifier && (
+                            <span className="truncate" title={secondaryIdentifier}>{secondaryIdentifier}</span>
                           )}
                           <span>{t('dashboard.totalRequests')}: {account.requestCount || 0}</span>
                           <span>{t('providers.usedToday')}: {formatUsage(account)}</span>
