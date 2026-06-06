@@ -1,67 +1,54 @@
-name: Release
+name: Build Linux x64 Binary
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
-      - 'v*.*.*-*'
+    branches:
+      - main  # 当 main 分支有代码推送时触发，你可以改成你自己的主分支名
+  workflow_dispatch: # 允许你在 GitHub 页面上点击按钮手动触发构建
 
 jobs:
-  release:
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
-      actions: write
-
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
-            arch: arm64
-          - os: macos-latest
-            arch: x64
-          - os: windows-latest
-            arch: x64
-          - os: ubuntu-latest
-            arch: x64
-          - os: ubuntu-latest
-            arch: arm64
+  build:
+    runs-on: ubuntu-latest # 使用最新的 Ubuntu 运行环境（内置了极其强悍的编译性能与物理内存）
 
     steps:
-      - name: Checkout repository
+      # 1. 检出 GitHub 仓库源码
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      # 2. 部署标准的 Node.js 环境（由于前面验证过 Node 22 拥有最稳定的免编译底座，这里锁死 Node 22）
+      - name: Setup Node.js Environment
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-on-version: '22'
+          cache: 'npm' # 开启 npm 缓存，大幅加速后续构建
 
-      - name: Install dependencies
+      # 3. 安装项目所有前后端依赖
+      - name: Install Dependencies
         run: npm ci
-        env:
-          ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
 
-      - name: Build application
+      # 4. 前后端全量编译（生成 dist/ 目录，确保 assets 路径中含有网页资源）
+      - name: Production Build (Frontend & Backend)
         run: npm run build
 
-      - name: Build and Publish (macOS)
-        if: matrix.os == 'macos-latest'
-        run: npx electron-builder --mac --${{ matrix.arch }} --publish=always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+      # 5. 依赖融合与单文件打包（彻底规避动态库 MODULE_NOT_FOUND 报错）
+      - name: Bundle and Package Binary
+        run: |
+          # 安装打包相关的开发依赖
+          npm install --save-dev esbuild @yao-pkg/pkg
+          
+          # 使用 esbuild 将后端及其依赖融合成单 JS
+          npx esbuild dist/backend/index.js --bundle --platform=node --target=node22 --outfile=dist/bundle.js
+          
+          # 创建或覆盖一个临时配置，确保将前端静态资源封装进二进制内部
+          echo '{"pkg":{"assets":["dist/frontend/**/*"]}}' > pkg-config.json
+          
+          # 调用 @yao-pkg/pkg 瞬间合成纯净的 Linux x64 免编译二进制
+          npx @yao-pkg/pkg dist/bundle.js --config pkg-config.json --targets node22-linux-x64 --output chat2api-web
 
-      - name: Build and Publish (Windows)
-        if: matrix.os == 'windows-latest'
-        run: npx electron-builder --win --${{ matrix.arch }} --publish=always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
-
-      - name: Build and Publish (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: npx electron-builder --linux --${{ matrix.arch }} --publish=always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+      # 6. 将打包出来的单文件 chat2api-web 上传到工作流产物中（不用发布，直接在 Action 页面下载即可）
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chat2api-web-linux-x64  # 下载时的压缩包名称
+          path: chat2api-web            # 需要打包上传的二进制文件路径
+          retention-days: 7             # 产物在 GitHub 上保留 7 天
