@@ -49,13 +49,13 @@
 | 服务商 | 认证类型 | 模型 |
 | --- | --- | --- |
 | DeepSeek | User Token | deepseek-v4-pro, deepseek-v4-flash |
-| GLM | Refresh Token | GLM-5.1 |
+| GLM | Refresh Token | GLM-5.2 |
 | Kimi | JWT Token | Kimi-K2.6 |
 | MiniMax | JWT Token | MiniMax-M2.7 |
 | Perplexity | Session Token | Auto（免费） |
 | Qwen（国内版） | SSO Ticket | Qwen3.6, Qwen3.7-Max, Qwen3.5-Flash, Qwen3-Max, Qwen3-Coder |
 | Qwen AI（国际版） | JWT Token | Qwen3.7-Max, Qwen3.6-Plus, Qwen3.6-35B-A3B, Qwen3.6-27B, Qwen3-Coder |
-| Z.ai | JWT Token | GLM-5.1, GLM-5-Turbo, GLM-5V-Turbo, GLM-5, GLM-4.7 |
+| Z.ai | JWT Token | GLM-5.2, GLM-5-Turbo, GLM-5V-Turbo, GLM-5, GLM-4.7 |
 | Mimo | Service Token | MiMo 模型 |
 
 ## 📥 安装部署
@@ -216,7 +216,7 @@ npm run dev
 
 ## 🔄 v1.4.0 更新内容
 
-- **模型更新** — 所有供应商同步至最新上游模型（DeepSeek V4、GLM-5.1、Qwen3.6/3.7、MiniMax-M2.7 等）
+- **模型更新** — 所有供应商同步至最新上游模型（DeepSeek V4、GLM-5.2、Qwen3.6/3.7、MiniMax-M2.7 等）
 - **会话管理** — Qwen 和 Kimi 新增批量会话列表及删除功能
 - **DeepSeek 搜索增强** — 改进搜索结果合并、引用处理和语义模型检测
 - **Z.ai 验证码支持** — 新增 `captcha_verify_param` 凭证字段

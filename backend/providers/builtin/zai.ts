@@ -27,14 +27,14 @@ export const zaiConfig: BuiltinProviderConfig = {
   enabled: true,
   description: 'Z.ai - Temporarily unavailable due to frontend captcha risk control. Browser-side verification state cannot be stably replayed by the proxy.',
   supportedModels: [
-    'GLM-5.1',
+    'GLM-5.2',
     'GLM-5-Turbo',
     'GLM-5V-Turbo',
     'GLM-5',
     'GLM-4.7',
   ],
   modelMappings: {
-    'GLM-5.1': 'GLM-5.1',
+    'GLM-5.2': 'GLM-5.2',
     'GLM-5-Turbo': 'GLM-5-Turbo',
     'GLM-5V-Turbo': 'GLM-5v-Turbo',
     'GLM-5': 'glm-5',

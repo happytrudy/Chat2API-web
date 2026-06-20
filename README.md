@@ -49,13 +49,13 @@
 | Provider | Auth Type | Models | Status |
 | --- | --- | --- | --- |
 | DeepSeek | User Token | deepseek-v4-pro, deepseek-v4-flash | Available |
-| GLM | Refresh Token | GLM-5.1 | Available |
+| GLM | Refresh Token | GLM-5.2 | Available |
 | Kimi | JWT Token | Kimi-K2.6 | Available |
 | MiniMax | JWT Token | MiniMax-M2.7 | Available |
 | Perplexity | Session Token | Auto (Free) | Available |
 | Qwen (CN) | SSO Ticket | Qwen3.6, Qwen3.7-Max, Qwen3.5-Flash, Qwen3-Max, Qwen3-Coder | Available |
 | Qwen AI (Global) | JWT Token | Qwen3.7-Max, Qwen3.6-Plus, Qwen3.6-35B-A3B, Qwen3.6-27B, Qwen3-Coder | Available |
-| Z.ai | JWT Token | GLM-5.1, GLM-5-Turbo, GLM-5V-Turbo, GLM-5, GLM-4.7 | Temporarily unavailable due to frontend captcha risk control |
+| Z.ai | JWT Token | GLM-5.2, GLM-5-Turbo, GLM-5V-Turbo, GLM-5, GLM-4.7 | Temporarily unavailable due to frontend captcha risk control |
 | Mimo | Service Token | MiMo models | Available |
 
 ## 📥 Installation
@@ -204,7 +204,7 @@ Works with Cherry Studio, Chatbox, OpenCat, Cline, Roo-Code, or any OpenAI-compa
 
 ## 🔄 What's New in v1.4.0
 
-- **Model Updates** — All providers synced to latest upstream models (DeepSeek V4, GLM-5.1, Qwen3.6/3.7, MiniMax-M2.7, etc.)
+- **Model Updates** — All providers synced to latest upstream models (DeepSeek V4, GLM-5.2, Qwen3.6/3.7, MiniMax-M2.7, etc.)
 - **Session Management** — Qwen and Kimi now support batch session listing and deletion
 - **DeepSeek Search Enhancement** — Improved search result merging, citation handling, and semantic model detection
 - **Thinking Mode Improvements** — Better thinking/search/fold mode detection across all providers
