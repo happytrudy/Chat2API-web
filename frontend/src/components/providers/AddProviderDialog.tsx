@@ -236,9 +236,9 @@ export function AddProviderDialog({
       apiEndpoint: 'https://chatglm.cn/api',
       enabled: true,
       description: t('glm.description'),
-      supportedModels: ['GLM-5', 'GLM-5-Flash', 'GLM-4-Plus', 'GLM-4-Flash', 'GLM-Zero-Preview', 'GLM-DeepResearch'],
+      supportedModels: ['GLM-5.2', 'GLM-5-Flash', 'GLM-4-Plus', 'GLM-4-Flash', 'GLM-Zero-Preview', 'GLM-DeepResearch'],
       modelMappings: {
-        'GLM-5': 'glm-5',
+        'GLM-5.2': 'glm-5.2',
         'GLM-5-Flash': 'glm-5-flash',
         'GLM-4-Plus': 'glm-4-plus',
         'GLM-4-Flash': 'glm-4-flash',

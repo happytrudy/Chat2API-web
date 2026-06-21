@@ -58,7 +58,7 @@ assignees: xiaoY233
 |---|---|
 | 出问题的 Provider |  |
 | 认证方式 | <!-- User Token / Refresh Token / JWT Token / SSO Ticket --> |
-| 使用的模型 | <!-- 如 DeepSeek-V3.2, GLM-5, kimi-k2.5 等 --> |
+| 使用的模型 | <!-- 如 DeepSeek-V3.2, GLM-5.2, kimi-k2.5 等 --> |
 
 ## 代理配置
 | 项目 | 值 |
