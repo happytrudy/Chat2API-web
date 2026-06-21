@@ -229,7 +229,8 @@ export class RequestForwarder {
   ): Promise<ForwardResult> {
     const startTime = Date.now()
     const config = storeManager.getConfig()
-    const maxRetries = config.retryCount
+    // Sequential strategy delegates retry to chat route for account switching
+    const maxRetries = config.loadBalanceStrategy === 'sequential' ? 0 : config.retryCount
 
     let lastError: string | undefined
 
