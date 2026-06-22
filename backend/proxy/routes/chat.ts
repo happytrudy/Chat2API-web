@@ -307,7 +307,26 @@ router.post('/completions', async (ctx: Context) => {
           const wrapperStream = new PassThrough()
           let collectedContent = ''
 
+          // Ban-aware stream error handler.
+          // When DeepSeek bans an account it returns an empty stream (no content);
+          // the banWatchStream is destroyed with a ban-marker error before any content
+          // is written to wrapperStream.  In that case we close wrapperStream cleanly
+          // (no SSE error chunk) and log the event.  All other errors still emit an
+          // SSE error chunk so the client knows something went wrong.
           result.stream.once('error', (err: Error) => {
+            const isBanError = err.message.includes('DeepSeek account banned')
+            if (isBanError) {
+              console.warn('[Chat/Sequential] Stream ban detected — closing cleanly without error chunk')
+              storeManager.addLog('warn', `[Sequential] DeepSeek stream ban on account ${account.name} — no retry possible for in-flight stream`, {
+                requestId,
+                providerId: provider.id,
+                accountId: account.id,
+                model: request.model,
+              })
+              wrapperStream.write('data: [DONE]\n\n')
+              wrapperStream.end()
+              return
+            }
             console.error('[Chat] Stream error:', err.message)
             const errorEvent = {
               id: requestId,
@@ -659,8 +678,22 @@ router.post('/completions', async (ctx: Context) => {
       // Collect stream content for logging (raw SSE output)
       let collectedContent = ''
 
-      // Handle stream errors
+      // Handle stream errors — distinguish ban errors (clean close) from real errors (SSE error chunk)
       result.stream.once('error', (err: Error) => {
+        const isBanError = err.message.includes('DeepSeek account banned')
+        if (isBanError) {
+          console.warn('[Chat] Stream ban detected — closing cleanly without error chunk')
+          storeManager.addLog('warn', `[DeepSeek] Stream ban on account ${account.name} — closing stream cleanly`, {
+            requestId,
+            providerId: provider.id,
+            accountId: account.id,
+            model: request.model,
+          })
+          wrapperStream.write('data: [DONE]\n\n')
+          wrapperStream.end()
+          return
+        }
+
         console.error('[Chat] Stream error:', err.message)
 
         // Send error as SSE event
